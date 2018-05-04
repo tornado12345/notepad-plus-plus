@@ -27,6 +27,7 @@
 
 
 #include <algorithm>
+#include <array>
 #include "shortcut.h"
 #include "Parameters.h"
 #include "ScintillaEditView.h"
@@ -145,30 +146,7 @@ KeyIDNAME namedKeyArray[] = {
 {TEXT("<>"), VK_OEM_102},
 };
 
-#define nrKeys sizeof(namedKeyArray)/sizeof(KeyIDNAME)
-
-/*
-TCHAR vKeyArray[][KEY_STR_LEN] = \
-{TEXT(""), TEXT("BACKSPACE"), TEXT("TAB"), TEXT("ENTER"), TEXT("PAUSE"), TEXT("CAPS LOCK"), TEXT("ESC"), TEXT("SPACEBAR"), TEXT("PAGE UP"), TEXT("PAGE DOWN"),\
-"END", TEXT("HOME"), TEXT("LEFT ARROW"), TEXT("UP ARROW"), TEXT("RIGHT ARROW"), TEXT("DOWN ARROW"), TEXT("INS"), TEXT("DEL"),\
-"0", TEXT("1"), TEXT("2"), TEXT("3"), TEXT("4"), TEXT("5"), TEXT("6"), TEXT("7"), TEXT("8"), TEXT("9"),\
-"A", TEXT("B"), TEXT("C"), TEXT("D"), TEXT("E"), TEXT("F"), TEXT("G"), TEXT("H"), TEXT("I"), TEXT("J"), TEXT("K"), TEXT("L"), TEXT("M"),\
-"N", TEXT("O"), TEXT("P"), TEXT("Q"), TEXT("R"), TEXT("S"), TEXT("T"), TEXT("U"), TEXT("V"), TEXT("W"), TEXT("X"), TEXT("Y"), TEXT("Z"),\
-"NUMPAD0", TEXT("NUMPAD1"), TEXT("NUMPAD2"), TEXT("NUMPAD3"), TEXT("NUMPAD4"),\
-"NUMPAD5", TEXT("NUMPAD6"), TEXT("NUMPAD7"), TEXT("NUMPAD8"), TEXT("NUMPAD9"),\
-"F1", TEXT("F2"), TEXT("F3"), TEXT("F4"), TEXT("F5"), TEXT("F6"),\
-"F7", TEXT("F8"), TEXT("F9"), TEXT("F10"), TEXT("F11"), TEXT("F12")};
-
-UCHAR vkeyValue[] = {\
-0x00, 0x08, 0x09, 0x0D, 0x13, 0x14, 0x1B, 0x20, 0x21, 0x22,\
-0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E, 0x30, 0x31,\
-0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42,\
-0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C,\
-0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56,\
-0x57, 0x58, 0x59, 0x5A, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65,\
-0x66, 0x67, 0x68, 0x69, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75,\
-0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B};
-*/
+#define nbKeys sizeof(namedKeyArray)/sizeof(KeyIDNAME)
 
 generic_string Shortcut::toString() const
 {
@@ -210,7 +188,14 @@ void Shortcut::setName(const TCHAR * name) {
 }
 
 generic_string ScintillaKeyMap::toString() const {
-	return toString(0);
+	generic_string sc = TEXT("");
+	size_t nbCombos = getSize();
+	for (size_t combo = 0; combo < nbCombos; ++combo){
+		sc += toString(combo);
+		if (combo < nbCombos - 1)
+			sc += TEXT(" or ");
+	}
+	return sc;
 }
 
 generic_string ScintillaKeyMap::toString(size_t index) const {
@@ -287,7 +272,7 @@ void getKeyStrFromVal(UCHAR keyVal, generic_string & str)
 	str = TEXT("");
 	bool found = false;
 	int i;
-	for (i = 0; i < nrKeys; ++i) {
+	for (i = 0; i < nbKeys; ++i) {
 		if (keyVal == namedKeyArray[i].id) {
 			found = true;
 			break;
@@ -395,7 +380,7 @@ INT_PTR CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM)
 			::SendDlgItemMessage(_hSelf, IDC_SHIFT_CHECK, BM_SETCHECK, _keyCombo._isShift?BST_CHECKED:BST_UNCHECKED, 0);
 			::EnableWindow(::GetDlgItem(_hSelf, IDOK), isValid() && (textlen > 0 || !_canModifyName));
 			int iFound = -1;
-			for (size_t i = 0 ; i < nrKeys ; ++i)
+			for (size_t i = 0 ; i < nbKeys ; ++i)
 			{
 				::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(namedKeyArray[i].name));
 
@@ -405,8 +390,13 @@ INT_PTR CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM)
 
 			if (iFound != -1)
 				::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_SETCURSEL, iFound, 0);
-			::ShowWindow(::GetDlgItem(_hSelf, IDC_WARNING_STATIC), isEnabled()?SW_HIDE:SW_SHOW);
+			
+			// Hide this warning on startup
+			::ShowWindow(::GetDlgItem(_hSelf, IDC_WARNING_STATIC), SW_HIDE);
+			
 			updateConflictState();
+			NativeLangSpeaker* nativeLangSpeaker = NppParameters::getInstance()->getNativeLangSpeaker();
+			nativeLangSpeaker->changeDlgLang(_hSelf, "ShortcutMapperSubDialg");
 			goToCenter();
 			return TRUE;
 		}
@@ -483,10 +473,7 @@ INT_PTR CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM)
 // return true if one of CommandShortcuts is deleted. Otherwise false.
 void Accelerator::updateShortcuts() 
 {
-	vector<int> IFAccIds;
-	IFAccIds.push_back(IDM_SEARCH_FINDNEXT);
-	IFAccIds.push_back(IDM_SEARCH_FINDPREV);
-	IFAccIds.push_back(IDM_SEARCH_FINDINCREMENT);
+	const array<unsigned long, 3> incrFindAccIds = { IDM_SEARCH_FINDNEXT, IDM_SEARCH_FINDPREV, IDM_SEARCH_FINDINCREMENT };
 
 	NppParameters *pNppParam = NppParameters::getInstance();
 
@@ -503,8 +490,9 @@ void Accelerator::updateShortcuts()
 	if (_pAccelArray)
 		delete [] _pAccelArray;
 	_pAccelArray = new ACCEL[nbMenu+nbMacro+nbUserCmd+nbPluginCmd];
-	vector<ACCEL> IFAcc;
+	vector<ACCEL> incrFindAcc;
 
+	ACCEL *pSearchFindAccel = nullptr;
 	int offset = 0;
 	size_t i = 0;
 	//no validation performed, it might be that invalid shortcuts are being used by default. Allows user to 'hack', might be a good thing
@@ -512,13 +500,16 @@ void Accelerator::updateShortcuts()
 	{
 		if (shortcuts[i].isEnabled())
 		{
-			_pAccelArray[offset].cmd = (WORD)(shortcuts[i].getID());
+			_pAccelArray[offset].cmd = static_cast<WORD>(shortcuts[i].getID());
 			_pAccelArray[offset].fVirt = shortcuts[i].getAcceleratorModifiers();
 			_pAccelArray[offset].key = shortcuts[i].getKeyCombo()._key;
 
 			// Special extra handling for shortcuts shared by Incremental Find dialog
-			if (std::find(IFAccIds.begin(), IFAccIds.end(), shortcuts[i].getID()) != IFAccIds.end())
-				IFAcc.push_back(_pAccelArray[offset]);
+			if (std::find(incrFindAccIds.begin(), incrFindAccIds.end(), shortcuts[i].getID()) != incrFindAccIds.end())
+				incrFindAcc.push_back(_pAccelArray[offset]);
+
+			if (shortcuts[i].getID() == IDM_SEARCH_FIND)
+				pSearchFindAccel = &_pAccelArray[offset];
 
 			++offset;
 		}
@@ -569,14 +560,28 @@ void Accelerator::updateShortcuts()
 	if (_hIncFindAccTab)
 		::DestroyAcceleratorTable(_hIncFindAccTab);
 
-	size_t nb = IFAcc.size();
-	ACCEL *tmpAccelArray = new ACCEL[nb];
+	size_t nb = incrFindAcc.size();
+	ACCEL *tmpIncrFindAccelArray = new ACCEL[nb];
 	for (i = 0; i < nb; ++i)
 	{
-		tmpAccelArray[i] = IFAcc[i];
+		tmpIncrFindAccelArray[i] = incrFindAcc[i];
 	}
-	_hIncFindAccTab = ::CreateAcceleratorTable(tmpAccelArray, static_cast<int32_t>(nb));
-	delete [] tmpAccelArray;
+	_hIncFindAccTab = ::CreateAcceleratorTable(tmpIncrFindAccelArray, static_cast<int32_t>(nb));
+	delete [] tmpIncrFindAccelArray;
+
+	if (_hIncFindAccTab)
+		::DestroyAcceleratorTable(_hIncFindAccTab);
+
+
+	if (_hFindAccTab)
+		::DestroyAcceleratorTable(_hFindAccTab);
+	if (pSearchFindAccel != nullptr)
+	{
+		ACCEL *tmpFindAccelArray = new ACCEL[1];
+		tmpFindAccelArray[0] = *pSearchFindAccel;
+		_hFindAccTab = ::CreateAcceleratorTable(tmpFindAccelArray, 1);
+		delete[] tmpFindAccelArray;
+	}
 
 	return;
 }
@@ -610,9 +615,10 @@ void Accelerator::updateMenuItemByCommand(CommandShortcut csc)
 {
 	int cmdID = csc.getID();
 	
-	//  Ensure that the menu item checks set prior to this update remain in affect.
+	// Ensure that the menu item checks set prior to this update remain in affect.
+	// Ensure that the menu item state is also maintained
 	UINT cmdFlags = GetMenuState(_hAccelMenu, cmdID, MF_BYCOMMAND );
-	cmdFlags = MF_BYCOMMAND | ((cmdFlags&MF_CHECKED) ? MF_CHECKED : MF_UNCHECKED);
+	cmdFlags = MF_BYCOMMAND | ((cmdFlags&MF_CHECKED) ? MF_CHECKED : MF_UNCHECKED) | ((cmdFlags&MF_DISABLED) ? MF_DISABLED : MF_ENABLED);
 	::ModifyMenu(_hAccelMenu, cmdID, cmdFlags, cmdID, csc.toMenuItemString().c_str());
 }
 
@@ -775,7 +781,8 @@ void ScintillaKeyMap::applyToCurrentIndex()
 
 }
 
-void ScintillaKeyMap::validateDialog() {
+void ScintillaKeyMap::validateDialog()
+{
 	bool valid = isValid();	//current combo valid?
 	bool isDisabling = _keyCombo._key == 0;	//true if this keycombo were to disable the shortcut
 	bool isDisabled = !isEnabled();	//true if this shortcut already is 
@@ -804,7 +811,7 @@ void ScintillaKeyMap::showCurrentSettings() {
 	::SendDlgItemMessage(_hSelf, IDC_CTRL_CHECK,	BM_SETCHECK, _keyCombo._isCtrl?BST_CHECKED:BST_UNCHECKED, 0);
 	::SendDlgItemMessage(_hSelf, IDC_ALT_CHECK,		BM_SETCHECK, _keyCombo._isAlt?BST_CHECKED:BST_UNCHECKED, 0);
 	::SendDlgItemMessage(_hSelf, IDC_SHIFT_CHECK,	BM_SETCHECK, _keyCombo._isShift?BST_CHECKED:BST_UNCHECKED, 0);
-	for (size_t i = 0 ; i < nrKeys ; ++i)
+	for (size_t i = 0 ; i < nbKeys ; ++i)
 	{
 		if (_keyCombo._key == namedKeyArray[i].id)
 		{
@@ -829,7 +836,7 @@ INT_PTR CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPARA
 			::SetDlgItemText(_hSelf, IDC_NAME_EDIT, _name);
 			_keyCombo = _keyCombos[0];
 
-			for (size_t i = 0 ; i < nrKeys ; ++i)
+			for (size_t i = 0 ; i < nbKeys ; ++i)
 			{
 				::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(namedKeyArray[i].name));
 			}
@@ -843,6 +850,11 @@ INT_PTR CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPARA
 			showCurrentSettings();
 			validateDialog();
 
+			// Hide this warning on startup
+			::ShowWindow(::GetDlgItem(_hSelf, IDC_WARNING_STATIC), SW_HIDE);
+
+			NativeLangSpeaker* nativeLangSpeaker = NppParameters::getInstance()->getNativeLangSpeaker();
+			nativeLangSpeaker->changeDlgLang(_hSelf, "ShortcutMapperSubDialg");
 			goToCenter();
 			return TRUE;
 		}
@@ -853,19 +865,16 @@ INT_PTR CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPARA
 			{
 				case IDC_CTRL_CHECK :
 					_keyCombo._isCtrl = BST_CHECKED == ::SendDlgItemMessage(_hSelf, static_cast<int32_t>(wParam), BM_GETCHECK, 0, 0);
-					//applyToCurrentIndex();
 					validateDialog();
 					return TRUE;
 
 				case IDC_ALT_CHECK :
 					_keyCombo._isAlt = BST_CHECKED == ::SendDlgItemMessage(_hSelf, static_cast<int32_t>(wParam), BM_GETCHECK, 0, 0);
-					//applyToCurrentIndex();
 					validateDialog();
 					return TRUE;
 
 				case IDC_SHIFT_CHECK :
 					_keyCombo._isShift = BST_CHECKED == ::SendDlgItemMessage(_hSelf, static_cast<int32_t>(wParam), BM_GETCHECK, 0, 0);
-					//applyToCurrentIndex();
 					validateDialog();
 					return TRUE;
 
@@ -932,7 +941,7 @@ INT_PTR CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPARA
 							{
 								auto i = ::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_GETCURSEL, 0, 0);
 								_keyCombo._key = namedKeyArray[i].id;
-								//applyToCurrentIndex();
+								::ShowWindow(::GetDlgItem(_hSelf, IDC_WARNING_STATIC), isEnabled() ? SW_HIDE : SW_SHOW);
 								validateDialog();
 								return TRUE;
 							}
@@ -952,4 +961,31 @@ INT_PTR CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPARA
 	}
 
 	//return FALSE;
+}
+
+CommandShortcut::CommandShortcut(Shortcut sc, long id) :	Shortcut(sc), _id(id) {
+	if ( _id < IDM_EDIT)
+		_category = TEXT("File");
+	else if ( _id < IDM_SEARCH)
+		_category = TEXT("Edit");
+	else if (_id >= IDM_EDIT_AUTOCOMPLETE and _id <= IDM_EDIT_AUTOCOMPLETE_PATH)
+		_category = TEXT("Edit");
+	else if ( _id < IDM_VIEW)
+		_category = TEXT("Search");
+	else if ( _id < IDM_FORMAT)
+		_category = TEXT("View");
+	else if ( _id >= IDM_VIEW_GOTO_ANOTHER_VIEW and _id <= IDM_VIEW_LOAD_IN_NEW_INSTANCE)
+		_category = TEXT("View");
+	else if ( _id < IDM_LANG)
+		_category = TEXT("Format");
+	else if ( _id < IDM_ABOUT)
+		_category = TEXT("Lang");
+	else if ( _id < IDM_SETTING)
+		_category = TEXT("About");
+	else if ( _id < IDM_TOOL)
+		_category = TEXT("Setting");
+	else if ( _id < IDM_EXECUTE)
+		_category = TEXT("Tool");
+	else
+		_category = TEXT("Execute");
 }

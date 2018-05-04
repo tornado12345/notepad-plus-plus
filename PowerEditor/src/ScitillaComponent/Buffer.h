@@ -25,6 +25,8 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #pragma once
+#include <mutex>
+
 #include "Utf8_16.h"
 
 
@@ -74,7 +76,7 @@ public:
 	//void activateBuffer(int index);
 	void checkFilesystemChanges();
 
-	size_t getNrBuffers() { return _nrBufs; };
+	size_t getNbBuffers() { return _nbBufs; };
 	int getBufferIndexByID(BufferID id);
 	Buffer * getBufferByIndex(size_t index);
 	Buffer * getBufferByID(BufferID id) {return static_cast<Buffer*>(id);}
@@ -95,6 +97,7 @@ public:
 	BufferID getBufferFromName(const TCHAR * name);
 	BufferID getBufferFromDocument(Document doc);
 
+	void setLoadedBufferEncodingAndEol(Buffer* buf, const Utf8_16_Read& UnicodeConvertor, int encoding, EolType bkformat);
 	bool reloadBuffer(BufferID id);
 	bool reloadBufferDeferred(BufferID id);
 	bool saveBuffer(BufferID id, const TCHAR* filename, bool isCopy = false, generic_string * error_msg = NULL);
@@ -125,13 +128,10 @@ private:
 	Document _scratchDocDefault;
 	std::vector<Buffer*> _buffers;
 	BufferID _nextBufferID = 0;
-	size_t _nrBufs = 0;
+	size_t _nbBufs = 0;
 };
 
 #define MainFileManager FileManager::getInstance()
-
-
-
 
 class Buffer final
 {
@@ -304,11 +304,6 @@ public:
 		_needReloading = reload;
 	}
 
-	/*
-	pair<size_t, bool> getLineUndoState(size_t currentLine) const;
-	void setLineUndoState(size_t currentLine, size_t undoLevel, bool isSaved = false);
-	*/
-
 	int docLength() const
 	{
 		assert(_pManager != nullptr);
@@ -356,12 +351,15 @@ public:
 	bool isMonitoringOn() const { return _isMonitoringOn; };
 	void updateTimeStamp();
 	void reload();
+	void setMapPosition(const MapPosition & mapPosition) { _mapPosition = mapPosition; };
+	MapPosition getMapPosition() const { return _mapPosition; };
+
+	void langHasBeenSetFromMenu() { _hasLangBeenSetFromMenu = true; };
 
 private:
 	int indexOfReference(const ScintillaEditView * identifier) const;
 
-	void setStatus(DocFileStatus status)
-	{
+	void setStatus(DocFileStatus status) {
 		_currentStatus = status;
 		doNotify(BufferChangeStatus);
 	}
@@ -394,8 +392,6 @@ private:
 	std::vector<Position> _positions;
 	std::vector<std::vector<size_t>> _foldStates;
 
-	//vector< pair<size_t, pair<size_t, bool> > > _linesUndoState;
-
 	//Environment properties
 	DocFileStatus _currentStatus;
 	time_t _timeStamp = 0; // 0 if it's a new doc
@@ -416,4 +412,10 @@ private:
 	// For the monitoring
 	HANDLE _eventHandle = nullptr;
 	bool _isMonitoringOn = false;
+
+	bool _hasLangBeenSetFromMenu = false;
+
+	MapPosition _mapPosition;
+
+	std::mutex _reloadFromDiskRequestGuard;
 };

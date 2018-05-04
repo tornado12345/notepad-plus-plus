@@ -242,7 +242,7 @@ public :
 		_ppEditView = ppEditView;
 	};
 
-	virtual void create(int dialogID, bool isRTL = false);
+	virtual void create(int dialogID, bool isRTL = false, bool msgDestParent = true);
 	
 	void initOptionsFromDlg();
 
@@ -335,6 +335,7 @@ public :
 	bool removeFinder(Finder *finder2remove);
 
 protected :
+	void resizeDialogElements(LONG newWidth);
 	virtual INT_PTR CALLBACK run_dlgProc(UINT message, WPARAM wParam, LPARAM lParam);
 	static LONG_PTR originalFinderProc;
 
@@ -344,6 +345,9 @@ protected :
     void combo2ExtendedMode(int comboID);
 
 private :
+	RECT _initialWindowRect;
+	LONG _deltaWidth;
+	LONG _initialClientWidth;
 
 	DIALOG_TYPE _currentStatus;
 	RECT _findClosePos, _replaceClosePos, _findInFilesClosePos;
@@ -352,6 +356,9 @@ private :
 	Finder  *_pFinder;
 
 	std::vector<Finder *> _findersOfFinder;
+
+	HWND _shiftTrickUpTip = nullptr;
+	HWND _2ButtonsTip = nullptr;
 
 
 	bool _isRTL;
@@ -393,7 +400,7 @@ private :
 	void updateCombo(int comboID);
 	void fillFindHistory();
     void fillComboHistory(int id, const std::vector<generic_string> & strings);
-	int saveComboHistory(int id, int maxcount, std::vector<generic_string> & strings);
+	int saveComboHistory(int id, int maxcount, std::vector<generic_string> & strings, bool saveEmpty);
 	static const int FR_OP_FIND = 1;
 	static const int FR_OP_REPLACE = 2;
 	static const int FR_OP_FIF = 4;

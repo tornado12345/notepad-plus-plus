@@ -28,14 +28,15 @@
 
 
 #include "Notepad_plus_Window.h"
+#include "functionListPanel.h"
 #include "xmlMatchedTagsHighlighter.h"
 #include "VerticalFileSwitcher.h"
 #include "ProjectPanel.h"
 #include "documentMap.h"
+#include "Common.h"
 #include <stack>
 
 using namespace std;
-
 
 // Only for 2 main Scintilla editors
 BOOL Notepad_plus::notify(SCNotification *notification)
@@ -148,6 +149,95 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			break;
 		}
 
+		case TCN_MOUSEHOVERING:
+		case TCN_MOUSEHOVERSWITCHING:
+		{
+			NppParameters *pNppParam = NppParameters::getInstance();
+			bool doPeekOnTab = pNppParam->getNppGUI()._isDocPeekOnTab;
+			bool doPeekOnMap = pNppParam->getNppGUI()._isDocPeekOnMap;
+
+			if (doPeekOnTab)
+			{
+				TBHDR *tbHdr = reinterpret_cast<TBHDR *>(notification);
+				DocTabView *pTabDocView = isFromPrimary ? &_mainDocTab : (isFromSecondary ? &_subDocTab : nullptr);
+
+				if (pTabDocView)
+				{
+					BufferID id = pTabDocView->getBufferByIndex(tbHdr->_tabOrigin);
+					Buffer *pBuf = MainFileManager->getBufferByID(id);
+
+					Buffer *currentBufMain = _mainEditView.getCurrentBuffer();
+					Buffer *currentBufSub = _subEditView.getCurrentBuffer();
+
+					RECT rect;
+					TabCtrl_GetItemRect(pTabDocView->getHSelf(), tbHdr->_tabOrigin, &rect);
+					POINT p;
+					p.x = rect.left;
+					p.y = rect.bottom;
+					::ClientToScreen(pTabDocView->getHSelf(), &p);
+
+					if (pBuf != currentBufMain && pBuf != currentBufSub) // if hover on other tab
+					{
+						_documentPeeker.doDialog(p, pBuf, *(const_cast<ScintillaEditView*>(pTabDocView->getScintillaEditView())));
+						_pEditView->getFocus();
+					}
+					else  // if hover on current active tab
+					{
+						_documentPeeker.display(false);
+					}
+				}
+			}
+
+			if (doPeekOnMap && _pDocMap && (!_pDocMap->isClosed()) && _pDocMap->isVisible())
+			{
+				TBHDR *tbHdr = reinterpret_cast<TBHDR *>(notification);
+				DocTabView *pTabDocView = isFromPrimary ? &_mainDocTab : (isFromSecondary ? &_subDocTab : nullptr);
+				if (pTabDocView)
+				{
+					BufferID id = pTabDocView->getBufferByIndex(tbHdr->_tabOrigin);
+					Buffer *pBuf = MainFileManager->getBufferByID(id);
+
+					Buffer *currentBufMain = _mainEditView.getCurrentBuffer();
+					Buffer *currentBufSub = _subEditView.getCurrentBuffer();
+
+					if (pBuf != currentBufMain && pBuf != currentBufSub) // if hover on other tab
+					{
+						_pDocMap->showInMapTemporarily(pBuf, notifyView);
+						_pDocMap->setSyntaxHiliting();
+					}
+					else  // if hover on current active tab
+					{
+						_pDocMap->reloadMap();
+						_pDocMap->setSyntaxHiliting();
+					}
+					_pDocMap->setTemporarilyShowing(true);
+				}
+			}
+
+			break;
+		}
+
+		case TCN_MOUSELEAVING:
+		{
+			NppParameters *pNppParam = NppParameters::getInstance();
+			bool doPeekOnTab = pNppParam->getNppGUI()._isDocPeekOnTab;
+			bool doPeekOnMap = pNppParam->getNppGUI()._isDocPeekOnMap;
+
+			if (doPeekOnTab)
+			{
+				_documentPeeker.display(false);
+			}
+
+			if (doPeekOnMap && _pDocMap && (!_pDocMap->isClosed()) && _pDocMap->isVisible())
+			{
+				_pDocMap->reloadMap();
+				_pDocMap->setSyntaxHiliting();
+
+				_pDocMap->setTemporarilyShowing(false);
+			}
+			break;
+		}
+
 		case TCN_TABDROPPEDOUTSIDE:
 		case TCN_TABDROPPED:
 		{
@@ -241,7 +331,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 
 		case TCN_TABDELETE:
 		{
-			int index = tabNotification->tabOrigin;
+			int index = tabNotification->_tabOrigin;
 			BufferID bufferToClose = notifyDocTab->getBufferByIndex(index);
 			Buffer * buf = MainFileManager->getBufferByID(bufferToClose);
 			int iView = isFromPrimary?MAIN_VIEW:SUB_VIEW;
@@ -270,6 +360,9 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			else
 				break;
 
+			// save map position before switch to a new document
+			_documentPeeker.saveCurrentSnapshot(*_pEditView);
+
 			switchEditViewTo(iView);
 			BufferID bufid = _pDocTab->getBufferByIndex(_pDocTab->getCurrentTabIndex());
 			if (bufid != BUFFER_INVALID)
@@ -278,6 +371,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 				activateBuffer(bufid, iView);
 				_isFolding = false;
 			}
+			_documentPeeker.display(false);
 			break;
 		}
 
@@ -422,7 +516,8 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 
 			if (!_tabPopupMenu.isCreated())
 			{
-				std::vector<MenuItemUnit> itemUnitArray;
+				// IMPORTANT: If list below is modified, you have to change the value of tabContextMenuItemPos[] in localization.cpp file
+                std::vector<MenuItemUnit> itemUnitArray;
 				itemUnitArray.push_back(MenuItemUnit(IDM_FILE_CLOSE, TEXT("Close")));
 				itemUnitArray.push_back(MenuItemUnit(IDM_FILE_CLOSEALL_BUT_CURRENT, TEXT("Close All BUT This")));
 				itemUnitArray.push_back(MenuItemUnit(IDM_FILE_CLOSEALL_TOLEFT, TEXT("Close All to the Left")));
@@ -437,6 +532,8 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 				itemUnitArray.push_back(MenuItemUnit(IDM_FILE_OPEN_FOLDER, TEXT("Open Containing Folder in Explorer")));
 				itemUnitArray.push_back(MenuItemUnit(IDM_FILE_OPEN_CMD, TEXT("Open Containing Folder in cmd")));
 				itemUnitArray.push_back(MenuItemUnit(0, NULL));
+				itemUnitArray.push_back(MenuItemUnit(IDM_FILE_OPEN_DEFAULT_VIEWER, TEXT("Open in Default Viewer")));
+				itemUnitArray.push_back(MenuItemUnit(0, NULL));
 				itemUnitArray.push_back(MenuItemUnit(IDM_EDIT_SETREADONLY,   TEXT("Read-Only")));
 				itemUnitArray.push_back(MenuItemUnit(IDM_EDIT_CLEARREADONLY, TEXT("Clear Read-Only Flag")));
 				itemUnitArray.push_back(MenuItemUnit(0, NULL));
@@ -448,6 +545,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 				itemUnitArray.push_back(MenuItemUnit(IDM_VIEW_CLONE_TO_ANOTHER_VIEW, TEXT("Clone to Other View")));
 				itemUnitArray.push_back(MenuItemUnit(IDM_VIEW_GOTO_NEW_INSTANCE, TEXT("Move to New Instance")));
 				itemUnitArray.push_back(MenuItemUnit(IDM_VIEW_LOAD_IN_NEW_INSTANCE, TEXT("Open in New Instance")));
+				// IMPORTANT: If list above is modified, you have to change the value of tabContextMenuItemPos[] in localization.cpp file
 
 				_tabPopupMenu.create(_pPublicInterface->getHSelf(), itemUnitArray);
 				_nativeLangSpeaker.changeLangTabContextMenu(_tabPopupMenu.getMenuHandle());
@@ -467,6 +565,8 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			bool isFileExisting = PathFileExists(buf->getFullPathName()) != FALSE;
 			_tabPopupMenu.enableItem(IDM_FILE_DELETE, isFileExisting);
 			_tabPopupMenu.enableItem(IDM_FILE_RENAME, isFileExisting);
+
+			_tabPopupMenu.enableItem(IDM_FILE_OPEN_DEFAULT_VIEWER, isAssoCommandExisting(buf->getFullPathName()));
 
 			bool isDirty = buf->isDirty();
 			bool isUntitled = buf->isUntitled();
@@ -691,13 +791,6 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 					}
 				}
 			}
-			else if (_isHotspotDblClicked)
-			{
-				auto pos = notifyView->execute(SCI_GETCURRENTPOS);
-				notifyView->execute(SCI_SETCURRENTPOS, pos);
-				notifyView->execute(SCI_SETANCHOR, pos);
-				_isHotspotDblClicked = false;
-			}
 
 			break;
 		}
@@ -755,6 +848,8 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			}
 
 			updateStatusBar();
+			if (_pFuncList && (!_pFuncList->isClosed()) && _pFuncList->isVisible())
+				_pFuncList->markEntry();
 			AutoCompletion * autoC = isFromPrimary?&_autoCompleteMain:&_autoCompleteSub;
 			autoC->update(0);
 
@@ -881,7 +976,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 				_linkTriggered = false;
 			}
 
-			if (_pDocMap)
+			if (_pDocMap && (not _pDocMap->isClosed()) && _pDocMap->isVisible() && not _pDocMap->isTemporarilyShowing())
 			{
 				_pDocMap->wrapMap();
 				_pDocMap->scrollMap();
@@ -894,51 +989,28 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			if (not notifyView)
 				return FALSE;
 
-			// Save the current wordChars before setting a custom list
-			const size_t wordBufferSize = notifyView->execute(SCI_GETWORDCHARS);
-			char *wordChars = new char[wordBufferSize + 1];
-			notifyView->execute(SCI_GETWORDCHARS, 0, reinterpret_cast<LPARAM>(wordChars));
-			wordChars[wordBufferSize] = '\0';
+			// Get the style and make sure it is a hotspot
+			uint8_t style = static_cast<uint8_t>(notifyView->execute(SCI_GETSTYLEAT, notification->position));
+			if (not notifyView->execute(SCI_STYLEGETHOTSPOT, style))
+				break;
 
-			// Set a custom list for detecting links
-			notifyView->execute(SCI_SETWORDCHARS, 0, reinterpret_cast<LPARAM>("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-+.,:?&@=/%#()"));
+			int startPos, endPos, docLen;
+			startPos = endPos = notification->position;
+			docLen = notifyView->getCurrentDocLen();
 
-			auto pos = notifyView->execute(SCI_GETCURRENTPOS);
-			int startPos = static_cast<int>(notifyView->execute(SCI_WORDSTARTPOSITION, pos, false));
-			int endPos = static_cast<int>(notifyView->execute(SCI_WORDENDPOSITION, pos, false));
+			// Walk backwards/forwards to get the contiguous text in the same style
+			while (startPos > 0 && static_cast<uint8_t>(notifyView->execute(SCI_GETSTYLEAT, startPos - 1)) == style)
+				startPos--;
+			while (endPos < docLen && static_cast<uint8_t>(notifyView->execute(SCI_GETSTYLEAT, endPos)) == style)
+				endPos++;
 
-			notifyView->execute(SCI_SETTARGETRANGE, startPos, endPos);
+			// Select the entire link
+			notifyView->execute(SCI_SETANCHOR, startPos);
+			notifyView->execute(SCI_SETCURRENTPOS, endPos);
 
-			int posFound = static_cast<int32_t>(notifyView->execute(SCI_SEARCHINTARGET, strlen(URL_REG_EXPR), reinterpret_cast<LPARAM>(URL_REG_EXPR)));
-			if (posFound != -2)
-			{
-				if (posFound != -1)
-				{
-					startPos = int(notifyView->execute(SCI_GETTARGETSTART));
-					endPos = int(notifyView->execute(SCI_GETTARGETEND));
-				}
+			generic_string url = notifyView->getGenericTextAsString(startPos, endPos);
+			::ShellExecute(_pPublicInterface->getHSelf(), TEXT("open"), url.c_str(), NULL, NULL, SW_SHOW);
 
-				// Prevent buffer overflow in getGenericText().
-				if(endPos - startPos > 2*MAX_PATH)
-					endPos = startPos + 2*MAX_PATH;
-
-				TCHAR currentWord[2*MAX_PATH];
-
-				notifyView->getGenericText(currentWord, MAX_PATH*2, startPos, endPos);
-
-				// This treatment would fail on some valid URLs where there's actually supposed to be a comma or parenthesis at the end.
-				size_t lastCharIndex = _tcsnlen(currentWord, MAX_PATH*2) - 1;
-				if ((currentWord[lastCharIndex] == ',' || currentWord[lastCharIndex] == ')' || currentWord[lastCharIndex] == '('))
-					currentWord[lastCharIndex] = '\0';
-
-				::ShellExecute(_pPublicInterface->getHSelf(), TEXT("open"), currentWord, NULL, NULL, SW_SHOW);
-				_isHotspotDblClicked = true;
-
-				// Re-set the previous wordChar list
-				notifyView->execute(SCI_SETWORDCHARS, 0, reinterpret_cast<LPARAM>(wordChars));
-			}
-
-			delete[] wordChars;
 			break;
 		}
 

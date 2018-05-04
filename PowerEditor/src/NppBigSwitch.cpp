@@ -107,7 +107,7 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 				_notepad_plus_plus_core._pPublicInterface = this;
 				return _notepad_plus_plus_core.init(hwnd);
 			}
-			catch (std::exception ex)
+			catch (std::exception& ex)
 			{
 				::MessageBoxA(hwnd, ex.what(), "Exception On WM_CREATE", MB_OK);
 				exit(-1);
@@ -123,6 +123,16 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 	return FALSE;
 }
 
+// Used by NPPM_GETFILENAMEATCURSOR
+int CharacterIs(TCHAR c, TCHAR *any)
+{
+	int i;
+	for (i = 0; any[i] != 0; i++)
+	{
+		if (any[i] == c) return TRUE;
+	}
+	return FALSE;
+}
 
 LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -167,7 +177,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			generic_string name{userLangName};
 
 			//loop through buffers and reset the language (L_USER, TEXT("")) if (L_USER, name)
-			for (size_t i = 0; i < MainFileManager->getNrBuffers(); ++i)
+			for (size_t i = 0; i < MainFileManager->getNbBuffers(); ++i)
 			{
 				Buffer* buf = MainFileManager->getBufferByIndex(i);
 				if (buf->getLangType() == L_USER && name == buf->getUserDefineLangName())
@@ -185,7 +195,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			generic_string newName{ reinterpret_cast<TCHAR *>(wParam) };
 
 			//loop through buffers and reset the language (L_USER, newName) if (L_USER, oldName)
-			for (size_t i = 0; i < MainFileManager->getNrBuffers(); ++i)
+			for (size_t i = 0; i < MainFileManager->getNbBuffers(); ++i)
 			{
 				Buffer* buf = MainFileManager->getBufferByIndex(i);
 				if (buf->getLangType() == L_USER && oldName == buf->getUserDefineLangName())
@@ -448,6 +458,11 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_INTERNAL_DOCORDERCHANGED :
 		{
+			if (_pFileSwitcherPanel)
+			{
+				_pFileSwitcherPanel->updateTabOrder();
+			}
+			
 			BufferID id = _pEditView->getCurrentBufferID();
 
 			// Notify plugins that current file is about to be closed
@@ -458,6 +473,25 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			_pluginsManager.notify(&scnN);
 			return TRUE;
 		}
+
+		case NPPM_INTERNAL_EXPORTFUNCLISTANDQUIT:
+		{
+			checkMenuItem(IDM_VIEW_FUNC_LIST, true);
+			_toolBar.setCheck(IDM_VIEW_FUNC_LIST, true);
+			launchFunctionList();
+			_pFuncList->setClosed(false);
+			_pFuncList->serialize();
+
+			::PostMessage(_pPublicInterface->getHSelf(), WM_COMMAND, IDM_FILE_EXIT, 0);
+		}
+		break;
+
+		case NPPM_INTERNAL_PRNTANDQUIT:
+		{
+			::PostMessage(_pPublicInterface->getHSelf(), WM_COMMAND, IDM_FILE_PRINTNOW, 0);
+			::PostMessage(_pPublicInterface->getHSelf(), WM_COMMAND, IDM_FILE_EXIT, 0);
+		}
+		break;
 
 		case NPPM_DISABLEAUTOUPDATE:
 		{
@@ -664,6 +698,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (lstrlen(fileStr) >= int(wParam))
 				{
+					// Not message for users so no translation
 					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM error"), MB_OK);
 					return FALSE;
 				}
@@ -685,6 +720,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (lstrlen(str) >= int(wParam))	//buffer too small
 				{
+					// Not message for users so no translation
 					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETCURRENTWORD error"), MB_OK);
 					return FALSE;
 				}
@@ -697,6 +733,59 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 			lstrcpy(pTchar, str);
 			return TRUE;
+		}
+
+		case NPPM_GETFILENAMEATCURSOR: // wParam = buffer length, lParam = (TCHAR*)buffer
+		{
+			const int strSize = CURRENTWORD_MAXLENGTH;
+			TCHAR str[strSize];
+			TCHAR strLine[strSize];
+			size_t lineNumber;
+			int col;
+			int i;
+			int hasSlash;
+			TCHAR *pTchar = reinterpret_cast<TCHAR *>(lParam);
+
+			_pEditView->getGenericSelectedText(str, strSize); // this is either the selected text, or the word under the cursor if there is no selection
+			hasSlash = FALSE;
+			for (i = 0; str[i] != 0; i++) if (CharacterIs(str[i], TEXT("\\/"))) hasSlash = TRUE;
+
+			if (hasSlash == FALSE)
+			{
+				// it's not a full file name so try to find the beginning and ending of it
+				int start;
+				int end;
+				TCHAR *delimiters;
+
+				lineNumber = _pEditView->getCurrentLineNumber();
+				col = _pEditView->getCurrentColumnNumber();
+				_pEditView->getLine(lineNumber, strLine, strSize);
+
+				// find the start
+				start = col;
+				delimiters = TEXT(" \t[(\"<>");
+				while ((start > 0) && (CharacterIs(strLine[start], delimiters) == FALSE)) start--;
+				if (CharacterIs(strLine[start], delimiters)) start++;
+
+				// find the end
+				end = col;
+				delimiters = TEXT(" \t:()[]<>\"\r\n");
+				while ((strLine[end] != 0) && (CharacterIs(strLine[end], delimiters) == FALSE)) end++;
+
+				lstrcpyn(str, &strLine[start], end - start + 1);
+			}
+
+			if (lstrlen(str) >= int(wParam))	//buffer too small
+			{
+				// Not message for users so no translation
+				::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETFILENAMEATCURSOR error"), MB_OK);
+				return FALSE;
+			}
+			else //buffer large enough, perform safe copy
+			{
+				lstrcpyn(pTchar, str, static_cast<int32_t>(wParam));
+				return TRUE;
+			}
 		}
 
 		case NPPM_GETNPPFULLFILEPATH:
@@ -716,6 +805,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (lstrlen(str) >= int(wParam))
 				{
+					// Not message for users so no translation
 					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETNPPDIRECTORY error"), MB_OK);
 					return FALSE;
 				}
@@ -1286,7 +1376,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_INTERNAL_SETCARETWIDTH:
 		{
-			NppGUI & nppGUI = const_cast<NppGUI &>(pNppParam->getNppGUI());
+			const NppGUI & nppGUI = pNppParam->getNppGUI();
 
 			if (nppGUI._caretWidth < 4)
 			{
@@ -1329,9 +1419,16 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			return TRUE;
 		}
 
+		case NPPM_INTERNAL_SETWORDCHARS:
+		{
+			_mainEditView.setWordChars();
+			_subEditView.setWordChars();
+			return TRUE;
+		}
+
 		case NPPM_INTERNAL_SETMULTISELCTION:
 		{
-			NppGUI & nppGUI = const_cast<NppGUI &>(pNppParam->getNppGUI());
+			const NppGUI & nppGUI = pNppParam->getNppGUI();
 			_mainEditView.execute(SCI_SETMULTIPLESELECTION, nppGUI._enableMultiSelection);
 			_subEditView.execute(SCI_SETMULTIPLESELECTION, nppGUI._enableMultiSelection);
 			return TRUE;
@@ -1339,7 +1436,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_INTERNAL_SETCARETBLINKRATE:
 		{
-			NppGUI & nppGUI = const_cast<NppGUI &>(pNppParam->getNppGUI());
+			const NppGUI & nppGUI = pNppParam->getNppGUI();
 			_mainEditView.execute(SCI_SETCARETPERIOD, nppGUI._caretBlinkRate);
 			_subEditView.execute(SCI_SETCARETPERIOD, nppGUI._caretBlinkRate);
 			return TRUE;
@@ -1459,13 +1556,13 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_INTERNAL_GETCHECKDOCOPT:
 		{
-			return (LRESULT)(const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetection;
+			return (LRESULT)(pNppParam->getNppGUI())._fileAutoDetection;
 		}
 
 		case NPPM_INTERNAL_SETCHECKDOCOPT:
 		{
 			// If nothing is changed by user, then we allow to set this value
-			if ((const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetection == (const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetectionOriginalValue)
+			if ((const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetection == (pNppParam->getNppGUI())._fileAutoDetectionOriginalValue)
 				(const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetection = (ChangeDetect)wParam;
 			return TRUE;
 		}
@@ -1753,7 +1850,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_SYSCOMMAND:
 		{
-			NppGUI & nppgui = const_cast<NppGUI &>((pNppParam->getNppGUI()));
+			const NppGUI & nppgui = (pNppParam->getNppGUI());
 			if (((nppgui._isMinimizedToTray && !_isAdministrator) || _pPublicInterface->isPrelaunch()) && (wParam == SC_MINIMIZE))
 			{
 				if (nullptr == _pTrayIco)
@@ -2035,7 +2132,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_ISSTATUSBARHIDDEN:
 		{
-			NppGUI & nppGUI = const_cast<NppGUI &>(pNppParam->getNppGUI());
+			const NppGUI & nppGUI = pNppParam->getNppGUI();
 			return !nppGUI._statusBarShow;
 		}
 
@@ -2220,7 +2317,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_ENTERMENULOOP:
 		{
-			NppGUI & nppgui = const_cast<NppGUI &>((pNppParam->getNppGUI()));
+			const NppGUI & nppgui = pNppParam->getNppGUI();
 			if (!nppgui._menuBarShow && !wParam && !_sysMenuEntering)
 				::SetMenu(hwnd, _mainMenuHandle);
 
@@ -2229,7 +2326,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_EXITMENULOOP:
 		{
-			NppGUI & nppgui = const_cast<NppGUI &>((pNppParam->getNppGUI()));
+			const NppGUI & nppgui = pNppParam->getNppGUI();
 			if (!nppgui._menuBarShow && !wParam && !_sysMenuEntering)
 				::SetMenu(hwnd, NULL);
 			_sysMenuEntering = false;

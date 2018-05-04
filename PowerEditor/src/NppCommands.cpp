@@ -38,6 +38,7 @@
 #include "fileBrowser.h"
 #include "Sorters.h"
 #include "LongRunningOperation.h"
+#include "md5.h"
 
 using namespace std;
 
@@ -60,6 +61,8 @@ void Notepad_plus::macroPlayback(Macro macro)
 	_playingBackMacro = false;
 }
 
+
+
 void Notepad_plus::command(int id)
 {
 	switch (id)
@@ -67,6 +70,17 @@ void Notepad_plus::command(int id)
 		case IDM_FILE_NEW:
 		{
 			fileNew();
+
+			/*
+			bool isFirstTime = ! _pluginsAdminDlg.isCreated();
+			_pluginsAdminDlg.setPluginsManager(&_pluginsManager);
+			_pluginsAdminDlg.doDialog(_nativeLangSpeaker.isRTL());
+			if (isFirstTime)
+			{
+				_nativeLangSpeaker.changeConfigLang(_pluginsAdminDlg.getHSelf());
+				_pluginsAdminDlg.updateListAndLoadFromJson();
+			}
+			*/
 		}
 		break;
 
@@ -90,6 +104,34 @@ void Notepad_plus::command(int id)
 		}
 		break;
 		
+		case IDM_FILE_OPEN_DEFAULT_VIEWER:
+		{
+			// Opens file in its default viewer. 
+            // Has the same effect as double–clicking this file in Windows Explorer.
+            BufferID buf = _pEditView->getCurrentBufferID();
+			HINSTANCE res = ::ShellExecute(NULL, TEXT("open"), buf->getFullPathName(), NULL, NULL, SW_SHOW);
+
+			// As per MSDN (https://msdn.microsoft.com/en-us/library/windows/desktop/bb762153(v=vs.85).aspx)
+			// If the function succeeds, it returns a value greater than 32.
+			// If the function fails, it returns an error value that indicates the cause of the failure.
+			int retResult = reinterpret_cast<int>(res);
+			if (retResult <= 32)
+			{
+				generic_string errorMsg;
+				errorMsg += GetLastErrorAsString(retResult);
+				errorMsg += TEXT("An attempt was made to execute the below command.");
+				errorMsg += TEXT("\n----------------------------------------------------------");
+				errorMsg += TEXT("\nCommand: ");
+				errorMsg += buf->getFullPathName();
+				errorMsg += TEXT("\nError Code: ");
+				errorMsg += intToString(retResult);
+				errorMsg += TEXT("\n----------------------------------------------------------");
+				
+				::MessageBox(_pPublicInterface->getHSelf(), errorMsg.c_str(), TEXT("ShellExecute - ERROR"), MB_ICONINFORMATION | MB_APPLMODAL);
+			}
+		}
+		break;
+
 		case IDM_FILE_OPENFOLDERASWORSPACE:
 		{
 			generic_string folderPath = folderBrowser(_pPublicInterface->getHSelf(), TEXT("Select a folder to add in Folder as Workspace panel"));
@@ -364,7 +406,7 @@ void Notepad_plus::command(int id)
 
 			HWND hwnd = _pPublicInterface->getHSelf();
 			TCHAR curentWord[CURRENTWORD_MAXLENGTH];
-			::SendMessage(hwnd, NPPM_GETCURRENTWORD, CURRENTWORD_MAXLENGTH, reinterpret_cast<LPARAM>(curentWord));
+			::SendMessage(hwnd, NPPM_GETFILENAMEATCURSOR, CURRENTWORD_MAXLENGTH, reinterpret_cast<LPARAM>(curentWord));
 			
 			TCHAR cmd2Exec[CURRENTWORD_MAXLENGTH];
 			if (id == IDM_EDIT_OPENINFOLDER)
@@ -586,14 +628,15 @@ void Notepad_plus::command(int id)
 			}
 			catch (size_t& failedLineIndex)
 			{
-				generic_string lineNo = std::to_wstring(1 + fromLine + failedLineIndex);
+				size_t lineNo = 1 + fromLine + failedLineIndex;
+
 				_nativeLangSpeaker.messageBox("SortingError",
 					_pPublicInterface->getHSelf(),
-					TEXT("Unable to perform numeric sort due to line $STR_REPLACE$."),
+					TEXT("Unable to perform numeric sorting due to line $INT_REPLACE$."),
 					TEXT("Sorting Error"),
 					MB_OK | MB_ICONINFORMATION | MB_APPLMODAL,
-					0,
-					lineNo.c_str()); // We don't use intInfo since it would require casting size_t -> int.
+					static_cast<int>(lineNo),
+					0);
 			}
 			_pEditView->execute(SCI_ENDUNDOACTION);
 
@@ -855,6 +898,7 @@ void Notepad_plus::command(int id)
 				_subEditView.execute(SCI_STARTRECORD);
 				_recordingMacro = true;
 			}
+			_recordingSaved = false;
 			checkMacroState();
 			break;
 		}
@@ -886,7 +930,11 @@ void Notepad_plus::command(int id)
 		case IDM_MACRO_SAVECURRENTMACRO :
 		{
 			if (addCurrentMacro())
+			{
+				_recordingSaved = true;
 				_runMacroDlg.initMacroList();
+				checkMacroState();
+			}
 			break;
 		}
 		case IDM_EDIT_FULLPATHTOCLIP :
@@ -967,10 +1015,15 @@ void Notepad_plus::command(int id)
 			FindStatus status = FSNoMessage;
 			_findReplaceDlg.processFindNext(s.c_str(), &op, &status);
 			if (status == FSEndReached)
-				_findReplaceDlg.setStatusbarMessage(TEXT("Find: Found the 1st occurrence from the top. The end of document has been reached."), FSEndReached);
+			{
+				generic_string msg = _nativeLangSpeaker.getLocalizedStrFromID("find-status-end-reached", TEXT("Find: Found the 1st occurrence from the top. The end of the document has been reached."));
+				_findReplaceDlg.setStatusbarMessage(msg, FSEndReached);
+			}
 			else if (status == FSTopReached)
-				_findReplaceDlg.setStatusbarMessage(TEXT("Find: Found the 1st occurrence from the bottom. The begin of document has been reached."), FSTopReached);
-			break;
+			{
+				generic_string msg = _nativeLangSpeaker.getLocalizedStrFromID("find-status-top-reached", TEXT("Find: Found the 1st occurrence from the bottom. The beginning of the document has been reached."));
+				_findReplaceDlg.setStatusbarMessage(msg, FSTopReached);
+			}
 		}
 		break;
 
@@ -996,22 +1049,30 @@ void Notepad_plus::command(int id)
 			FindStatus status = FSNoMessage;
 			_findReplaceDlg.processFindNext(str, &op, &status);
 			if (status == FSEndReached)
-				_findReplaceDlg.setStatusbarMessage(TEXT("Find: Found the 1st occurrence from the top. The end of document has been reached."), FSEndReached);
+			{
+				generic_string msg = _nativeLangSpeaker.getLocalizedStrFromID("find-status-end-reached", TEXT("Find: Found the 1st occurrence from the top. The end of the document has been reached."));
+				_findReplaceDlg.setStatusbarMessage(msg, FSEndReached);
+			}
 			else if (status == FSTopReached)
-				_findReplaceDlg.setStatusbarMessage(TEXT("Find: Found the 1st occurrence from the bottom. The begin of document has been reached."), FSTopReached);
-			break;
+			{
+				generic_string msg = _nativeLangSpeaker.getLocalizedStrFromID("find-status-top-reached", TEXT("Find: Found the 1st occurrence from the bottom. The beginning of the document has been reached."));
+				_findReplaceDlg.setStatusbarMessage(msg, FSTopReached);
+			}
         }
+		break;
 
 		case IDM_SEARCH_GOTONEXTFOUND:
 		{
 			_findReplaceDlg.gotoNextFoundResult();
-			break;
 		}
+		break;
+
 		case IDM_SEARCH_GOTOPREVFOUND:
 		{
 			_findReplaceDlg.gotoNextFoundResult(-1);
-			break;
 		}
+		break;
+
 		case IDM_FOCUS_ON_FOUND_RESULTS:
 		{
 			if (GetFocus() == _findReplaceDlg.getHFindResults())
@@ -1019,8 +1080,8 @@ void Notepad_plus::command(int id)
 				switchEditViewTo(currentView());
 			else
 				_findReplaceDlg.focusOnFinder();
-			break;
 		}
+		break;
 
 		case IDM_SEARCH_VOLATILE_FINDNEXT :
 		case IDM_SEARCH_VOLATILE_FINDPREV :
@@ -1035,12 +1096,17 @@ void Notepad_plus::command(int id)
 			FindStatus status = FSNoMessage;
 			_findReplaceDlg.processFindNext(text2Find, &op, &status);
 			if (status == FSEndReached)
-				_findReplaceDlg.setStatusbarMessage(TEXT("Find: Found the 1st occurrence from the top. The end of document has been reached."), FSEndReached);
+			{
+				generic_string msg = _nativeLangSpeaker.getLocalizedStrFromID("find-status-end-reached", TEXT("Find: Found the 1st occurrence from the top. The end of the document has been reached."));
+				_findReplaceDlg.setStatusbarMessage(msg, FSEndReached);
+			}
 			else if (status == FSTopReached)
-				_findReplaceDlg.setStatusbarMessage(TEXT("Find: Found the 1st occurrence from the bottom. The begin of document has been reached."), FSTopReached);
-
-			break;
+			{
+				generic_string msg = _nativeLangSpeaker.getLocalizedStrFromID("find-status-top-reached", TEXT("Find: Found the 1st occurrence from the bottom. The beginning of the document has been reached."));
+				_findReplaceDlg.setStatusbarMessage(msg, FSTopReached);
+			}
 		}
+		break;
 
 		case IDM_SEARCH_MARKALLEXT1 :
 		case IDM_SEARCH_MARKALLEXT2 :
@@ -1075,8 +1141,9 @@ void Notepad_plus::command(int id)
 			{
 				_findReplaceDlg.markAll(text2Find, styleID, lstrlen(text2Find) == lstrlen(text2Find2));
 			}
-			break;
 		}
+		break;
+
 		case IDM_SEARCH_UNMARKALLEXT1 :
 		case IDM_SEARCH_UNMARKALLEXT2 :
 		case IDM_SEARCH_UNMARKALLEXT3 :
@@ -1096,8 +1163,8 @@ void Notepad_plus::command(int id)
 				styleID = SCE_UNIVERSAL_FOUND_STYLE_EXT5;
 
 			_pEditView->clearIndicator(styleID);
-			break;
 		}
+		break;
 
 		case IDM_SEARCH_GONEXTMARKER1 :
 		case IDM_SEARCH_GONEXTMARKER2 :
@@ -1121,9 +1188,8 @@ void Notepad_plus::command(int id)
 				styleID = SCE_UNIVERSAL_FOUND_STYLE;
 
 			goToNextIndicator(styleID);
-
-			break;
 		}
+		break;
 
 		case IDM_SEARCH_GOPREVMARKER1 :
 		case IDM_SEARCH_GOPREVMARKER2 :
@@ -1146,10 +1212,9 @@ void Notepad_plus::command(int id)
 			else // (id == IDM_SEARCH_GOPREVMARKER_DEF)
 				styleID = SCE_UNIVERSAL_FOUND_STYLE;
 
-			goToPreviousIndicator(styleID);
-
-			break;
+			goToPreviousIndicator(styleID);	
 		}
+		break;
 
 		case IDM_SEARCH_CLEARALLMARKS :
 		{
@@ -1158,8 +1223,8 @@ void Notepad_plus::command(int id)
 			_pEditView->clearIndicator(SCE_UNIVERSAL_FOUND_STYLE_EXT3);
 			_pEditView->clearIndicator(SCE_UNIVERSAL_FOUND_STYLE_EXT4);
 			_pEditView->clearIndicator(SCE_UNIVERSAL_FOUND_STYLE_EXT5);
-			break;
 		}
+		break;
 
         case IDM_SEARCH_GOTOLINE :
 		{
@@ -1167,8 +1232,8 @@ void Notepad_plus::command(int id)
 			_goToLineDlg.doDialog(_nativeLangSpeaker.isRTL());
 			if (isFirstTime)
 				_nativeLangSpeaker.changeDlgLang(_goToLineDlg.getHSelf(), "GoToLine");
-			break;
 		}
+		break;
 
 		case IDM_SEARCH_FINDCHARINRANGE :
 		{
@@ -1176,8 +1241,8 @@ void Notepad_plus::command(int id)
 			_findCharsInRangeDlg.doDialog(_nativeLangSpeaker.isRTL());
 			if (isFirstTime)
 				_nativeLangSpeaker.changeDlgLang(_findCharsInRangeDlg.getHSelf(), "FindCharsInRange");
-			break;
 		}
+		break;
 
         case IDM_EDIT_COLUMNMODETIP :
 		{
@@ -1186,8 +1251,8 @@ void Notepad_plus::command(int id)
 					TEXT("Please use \"ALT+Mouse Selection\" or \"Alt+Shift+Arrow key\" to switch to column mode."),
 					TEXT("Column Mode Tip"),
 					MB_OK|MB_APPLMODAL);
-			break;
 		}
+		break;
 
         case IDM_EDIT_COLUMNMODE :
 		{
@@ -1195,8 +1260,8 @@ void Notepad_plus::command(int id)
 			_colEditorDlg.doDialog(_nativeLangSpeaker.isRTL());
 			if (isFirstTime)
 				_nativeLangSpeaker.changeDlgLang(_colEditorDlg.getHSelf(), "ColumnEditor");
-			break;
 		}
+		break;
 
 		case IDM_SEARCH_GOTOMATCHINGBRACE :
 		case IDM_SEARCH_SELECTMATCHINGBRACES :
@@ -1212,8 +1277,8 @@ void Notepad_plus::command(int id)
 				else
 					_pEditView->execute(SCI_SETSEL, min(braceAtCaret, braceOpposite), max(braceAtCaret, braceOpposite) + 1); // + 1 so we always include the ending brace in the selection.
 			}
-			break;
 		}
+		break;
 
         case IDM_SEARCH_TOGGLE_BOOKMARK :
 	        bookmarkToggle(-1);
@@ -1298,9 +1363,8 @@ void Notepad_plus::command(int id)
 			}
 			checkMenuItem(IDM_LANG_USER_DLG, !isUDDlgVisible);
 			_toolBar.setCheck(IDM_LANG_USER_DLG, !isUDDlgVisible);
-
-            break;
         }
+		break;
 
 		case IDM_EDIT_SELECTALL:
 			_pEditView->execute(SCI_SELECTALL);
@@ -1651,7 +1715,7 @@ void Notepad_plus::command(int id)
 			TabBarPlus::setDrawTabCloseButton(!TabBarPlus::drawTabCloseButton());
 
 			// This part is just for updating (redraw) the tabs
-			int tabDpiDynamicalHeight = NppParameters::getInstance()->_dpiManager.scaleY(TabBarPlus::drawTabCloseButton() ? 22 : 22);
+			int tabDpiDynamicalHeight = NppParameters::getInstance()->_dpiManager.scaleY(22);
 			int tabDpiDynamicalWidth = NppParameters::getInstance()->_dpiManager.scaleX(TabBarPlus::drawTabCloseButton() ? 60 : 45);
 			TabCtrl_SetItemSize(_mainDocTab.getHSelf(), tabDpiDynamicalWidth, tabDpiDynamicalHeight);
 			TabCtrl_SetItemSize(_subDocTab.getHSelf(), tabDpiDynamicalWidth, tabDpiDynamicalHeight);
@@ -1751,7 +1815,7 @@ void Notepad_plus::command(int id)
 		case IDM_VIEW_WRAP:
 		{
 			bool isWraped = !_pEditView->isWrap();
-			//--FLS: ViewMoveAtWrappingDisableFix: Disable wrapping messes up visible lines. Therefore save view position before in IDM_VIEW_WRAP and restore after SCN_PAINTED, as Scintilla-Doc. says
+			// ViewMoveAtWrappingDisableFix: Disable wrapping messes up visible lines. Therefore save view position before in IDM_VIEW_WRAP and restore after SCN_PAINTED, as Scintilla-Doc. says
 			if (!isWraped)
 			{
 				_mainEditView.saveCurrentPos();
@@ -1922,13 +1986,10 @@ void Notepad_plus::command(int id)
 
 		case IDM_VIEW_MONITORING:
 		{
-			static HANDLE hThread = nullptr;
 			Buffer * curBuf = _pEditView->getCurrentBuffer();
 			if (curBuf->isMonitoringOn())
 			{
 				curBuf->stopMonitoring();
-				::CloseHandle(hThread);
-				hThread = nullptr;
 				checkMenuItem(IDM_VIEW_MONITORING, false);
 				_toolBar.setCheck(IDM_VIEW_MONITORING, false);
 				curBuf->setUserReadOnly(false);
@@ -1940,7 +2001,11 @@ void Notepad_plus::command(int id)
 				{
 					if (curBuf->isDirty())
 					{
-						::MessageBox(_pPublicInterface->getHSelf(), TEXT("The document is dirty. Please save the modification before monitoring it."), TEXT("Monitoring problem"), MB_OK);
+						_nativeLangSpeaker.messageBox("DocTooDirtyToMonitor",
+							_pPublicInterface->getHSelf(),
+							TEXT("The document is dirty. Please save the modification before monitoring it."),
+							TEXT("Monitoring problem"),
+							MB_OK);
 					}
 					else
 					{
@@ -1948,14 +2013,19 @@ void Notepad_plus::command(int id)
 						curBuf->setUserReadOnly(true);
 						
 						MonitorInfo *monitorInfo = new MonitorInfo(curBuf, _pPublicInterface->getHSelf());
-						hThread = ::CreateThread(NULL, 0, monitorFileOnChange, (void *)monitorInfo, 0, NULL); // will be deallocated while quitting thread
+						HANDLE hThread = ::CreateThread(NULL, 0, monitorFileOnChange, (void *)monitorInfo, 0, NULL); // will be deallocated while quitting thread
+						::CloseHandle(hThread);
 						checkMenuItem(IDM_VIEW_MONITORING, true);
 						_toolBar.setCheck(IDM_VIEW_MONITORING, true);
 					}
 				}
 				else
 				{
-					::MessageBox(_pPublicInterface->getHSelf(), TEXT("The file should exist to be monitored."), TEXT("Monitoring problem"), MB_OK);
+					_nativeLangSpeaker.messageBox("DocNoExistToMonitor",
+						_pPublicInterface->getHSelf(),
+						TEXT("The file should exist to be monitored."),
+						TEXT("Monitoring problem"),
+						MB_OK);
 				}
 			}
 
@@ -2031,7 +2101,7 @@ void Notepad_plus::command(int id)
 				if (buf->isDirty())
 				{
 					int answer = _nativeLangSpeaker.messageBox("SaveCurrentModifWarning",
-						NULL,
+						_pPublicInterface->getHSelf(),
 						TEXT("You should save the current modification.\rAll the saved modifications can not be undone.\r\rContinue?"),
 						TEXT("Save Current Modification"),
 						MB_YESNO);
@@ -2049,7 +2119,7 @@ void Notepad_plus::command(int id)
 				{
 					generic_string msg, title;
 					int answer = _nativeLangSpeaker.messageBox("LoseUndoAbilityWarning",
-						NULL,
+						_pPublicInterface->getHSelf(),
 						TEXT("You should save the current modification.\rAll the saved modifications can not be undone.\r\rContinue?"),
 						TEXT("Lose Undo Ability Waning"),
 						MB_YESNO);
@@ -2099,12 +2169,12 @@ void Notepad_plus::command(int id)
         case IDM_FORMAT_ISO_8859_7  :
         case IDM_FORMAT_ISO_8859_8  :
         case IDM_FORMAT_ISO_8859_9  :
-        case IDM_FORMAT_ISO_8859_10 :
-        case IDM_FORMAT_ISO_8859_11 :
+        //case IDM_FORMAT_ISO_8859_10 :
+        //case IDM_FORMAT_ISO_8859_11 :
         case IDM_FORMAT_ISO_8859_13 :
         case IDM_FORMAT_ISO_8859_14 :
         case IDM_FORMAT_ISO_8859_15 :
-        case IDM_FORMAT_ISO_8859_16 :
+        //case IDM_FORMAT_ISO_8859_16 :
         case IDM_FORMAT_DOS_437 :
         case IDM_FORMAT_DOS_720 :
         case IDM_FORMAT_DOS_737 :
@@ -2146,7 +2216,7 @@ void Notepad_plus::command(int id)
             {
 				generic_string warning, title;
 				int answer = _nativeLangSpeaker.messageBox("SaveCurrentModifWarning",
-					NULL,
+					_pPublicInterface->getHSelf(),
 					TEXT("You should save the current modification.\rAll the saved modifications can not be undone.\r\rContinue?"),
 					TEXT("Save Current Modification"),
 					MB_YESNO);
@@ -2164,7 +2234,7 @@ void Notepad_plus::command(int id)
             {
 				generic_string msg, title;
 				int answer = _nativeLangSpeaker.messageBox("LoseUndoAbilityWarning",
-					NULL,
+					_pPublicInterface->getHSelf(),
 					TEXT("You should save the current modification.\rAll the saved modifications can not be undone.\r\rContinue?"),
 					TEXT("Lose Undo Ability Waning"),
 					MB_YESNO);
@@ -2405,7 +2475,6 @@ void Notepad_plus::command(int id)
             GridState st = id==IDM_SETTING_SHORTCUT_MAPPER_MACRO?STATE_MACRO:id==IDM_SETTING_SHORTCUT_MAPPER_RUN?STATE_USER:STATE_MENU;
 			ShortcutMapper shortcutMapper;
             shortcutMapper.init(_pPublicInterface->getHinst(), _pPublicInterface->getHSelf(), st);
-            _nativeLangSpeaker.changeShortcutmapperLang(&shortcutMapper);
 			shortcutMapper.doDialog(_nativeLangSpeaker.isRTL());
 			shortcutMapper.destroy();
 			break;
@@ -2424,7 +2493,6 @@ void Notepad_plus::command(int id)
 
         case IDM_SETTING_EDITCONTEXTMENU :
         {
-			generic_string warning, title;
 			_nativeLangSpeaker.messageBox("ContextMenuXmlEditWarning",
 				_pPublicInterface->getHSelf(),
 				TEXT("Editing contextMenu.xml allows you to modify your Notepad++ popup context menu on edit zone.\rYou have to restart your Notepad++ to take effect after modifying contextMenu.xml."),
@@ -2472,6 +2540,49 @@ void Notepad_plus::command(int id)
 			break;
 		}
 
+		case IDM_TOOL_MD5_GENERATE:
+		{
+			bool isFirstTime = !_md5FromTextDlg.isCreated();
+			_md5FromTextDlg.doDialog(_nativeLangSpeaker.isRTL());
+			if (isFirstTime)
+				_nativeLangSpeaker.changeDlgLang(_md5FromTextDlg.getHSelf(), "MD5FromTextDlg");
+		}
+		break;
+
+		case IDM_TOOL_MD5_GENERATEFROMFILE:
+		{
+			bool isFirstTime = !_md5FromFilesDlg.isCreated();
+			_md5FromFilesDlg.doDialog(_nativeLangSpeaker.isRTL());
+			if (isFirstTime)
+				_nativeLangSpeaker.changeDlgLang(_md5FromFilesDlg.getHSelf(), "MD5FromFilesDlg");
+		}
+		break;
+
+		case IDM_TOOL_MD5_GENERATEINTOCLIPBOARD:
+		{
+			if (_pEditView->execute(SCI_GETSELECTIONS) == 1)
+			{
+				size_t selectionStart = _pEditView->execute(SCI_GETSELECTIONSTART);
+				size_t selectionEnd = _pEditView->execute(SCI_GETSELECTIONEND);
+
+				int32_t strLen = static_cast<int32_t>(selectionEnd - selectionStart);
+				if (strLen)
+				{
+					int strSize = strLen + 1;
+					char *selectedStr = new char[strSize];
+					_pEditView->execute(SCI_GETSELTEXT, 0, reinterpret_cast<LPARAM>(selectedStr));
+
+					MD5 md5;
+					std::string md5ResultA = md5.digestString(selectedStr);
+					std::wstring md5ResultW(md5ResultA.begin(), md5ResultA.end());
+					str2Clipboard(md5ResultW, _pPublicInterface->getHSelf());
+					
+					delete [] selectedStr;
+				}
+			}
+		}
+		break;
+
 		case IDM_DEBUGINFO:
 		{
 			_debugInfoDlg.doDialog();
@@ -2492,7 +2603,9 @@ void Notepad_plus::command(int id)
 			{
 				char author[maxSelLen+1] = "";
 				_pEditView->getSelectedText(author, maxSelLen + 1);
-				int iQuote = getQuoteIndexFrom(author);
+				WcharMbcsConvertor *wmc = WcharMbcsConvertor::getInstance();
+				const wchar_t * authorW = wmc->char2wchar(author, _nativeLangSpeaker.getLangEncoding());
+				int iQuote = getQuoteIndexFrom(authorW);
 
 				if (iQuote == -1)
 				{
@@ -2515,6 +2628,7 @@ void Notepad_plus::command(int id)
 					return;
 				}
 			}
+
 			if (doAboutDlg)
 			{
 				bool isFirstTime = !_aboutDlg.isCreated();
@@ -2577,6 +2691,7 @@ void Notepad_plus::command(int id)
 
 		case IDM_CMDLINEARGUMENTS:
 		{
+			// No translattable
 			::MessageBox(NULL, COMMAND_ARG_HELP, TEXT("Notepad++ Command Argument Help"), MB_OK);
 			break;
 		}
@@ -2602,11 +2717,16 @@ void Notepad_plus::command(int id)
 		case IDM_UPDATE_NPP :
 		case IDM_CONFUPDATERPROXY :
 		{
-			// wingup doesn't work with the obsolet security layer (API) under xp since downloadings are secured with SSL on notepad_plus_plus.org
+			// wingup doesn't work with the obsolete security layer (API) under xp since downloadings are secured with SSL on notepad_plus_plus.org
 			winVer ver = NppParameters::getInstance()->getWinVersion();
 			if (ver <= WV_XP)
 			{
-				long res = ::MessageBox(NULL, TEXT("Notepad++ updater is not compatible with XP due to the obsolet security layer under XP.\rDo you want to go to Notepad++ page to download the latest version?"), TEXT("Notepad++ Updater"), MB_YESNO);
+				long res = _nativeLangSpeaker.messageBox("XpUpdaterProblem",
+					_pPublicInterface->getHSelf(),
+					TEXT("Notepad++ updater is not compatible with XP due to the obsolete security layer under XP.\rDo you want to go to Notepad++ page to download the latest version?"),
+					TEXT("Notepad++ Updater"),
+					MB_YESNO);
+
 				if (res == IDYES)
 				{
 					::ShellExecute(NULL, TEXT("open"), TEXT("https://notepad-plus-plus.org/download/"), NULL, NULL, SW_SHOWNORMAL);
@@ -2724,9 +2844,38 @@ void Notepad_plus::command(int id)
         case IDM_LANG_R :
         case IDM_LANG_JSP :
 		case IDM_LANG_COFFEESCRIPT:
+		case IDM_LANG_BAANC:
+		case IDM_LANG_SREC:
+		case IDM_LANG_IHEX:
+		case IDM_LANG_TEHEX:
+		case IDM_LANG_SWIFT:
+        case IDM_LANG_ASN1 :
+        case IDM_LANG_AVS :
+        case IDM_LANG_BLITZBASIC :
+        case IDM_LANG_PUREBASIC :
+        case IDM_LANG_FREEBASIC :
+        case IDM_LANG_CSOUND :
+        case IDM_LANG_ERLANG :
+        case IDM_LANG_ESCRIPT :
+        case IDM_LANG_FORTH :
+        case IDM_LANG_LATEX :
+        case IDM_LANG_MMIXAL :
+        case IDM_LANG_NIMROD :
+        case IDM_LANG_NNCRONTAB :
+        case IDM_LANG_OSCRIPT :
+        case IDM_LANG_REBOL :
+        case IDM_LANG_REGISTRY :
+        case IDM_LANG_RUST :
+        case IDM_LANG_SPICE :
+        case IDM_LANG_TXT2TAGS :
+        case IDM_LANG_VISUALPROLOG:
 		case IDM_LANG_USER :
 		{
             setLanguage(menuID2LangType(id));
+			// Manually set language, don't change language even file extension changes.
+			Buffer *buffer = _pEditView->getCurrentBuffer();
+			buffer->langHasBeenSetFromMenu();
+
 			if (_pDocMap)
 			{
 				_pDocMap->setSyntaxHiliting();
@@ -2744,17 +2893,19 @@ void Notepad_plus::command(int id)
 			if (nbDoc > 1)
 			{
 				bool direction = (id == IDC_NEXT_DOC)?dirDown:dirUp;
-
 				if (!doTaskList)
 				{
 					activateNextDoc(direction);
 				}
 				else
 				{
-					TaskListDlg tld;
-					HIMAGELIST hImgLst = _docTabIconList.getHandle();
-					tld.init(_pPublicInterface->getHinst(), _pPublicInterface->getHSelf(), hImgLst, direction);
-					tld.doDialog();
+					if (TaskListDlg::_instanceCount == 0)
+					{
+						TaskListDlg tld;
+						HIMAGELIST hImgLst = _docTabIconList.getHandle();
+						tld.init(_pPublicInterface->getHinst(), _pPublicInterface->getHSelf(), hImgLst, direction);
+						tld.doDialog();
+					}
 				}
 			}
 			_linkTriggered = true;
@@ -2811,7 +2962,7 @@ void Notepad_plus::command(int id)
 				if (dlgNode)
 					dlgNode = _nativeLangSpeaker.searchDlgNode(dlgNode, "Window");
 			}
-			_windowsDlg.doDialog(dlgNode);
+			_windowsDlg.doDialog();
 		}
 		break;
 
@@ -2828,6 +2979,9 @@ void Notepad_plus::command(int id)
 		{
 			NppGUI & nppGUI = const_cast<NppGUI &>((NppParameters::getInstance())->getNppGUI());
 			::ShowWindow(_pPublicInterface->getHSelf(), nppGUI._isMaximized?SW_MAXIMIZE:SW_SHOW);
+
+			// Send sizing info to make window fit (specially to show tool bar. Fixed issue #2600)
+			::SendMessage(_pPublicInterface->getHSelf(), WM_SIZE, 0, 0);
 		}
 		break;
 
@@ -2849,6 +3003,9 @@ void Notepad_plus::command(int id)
 		{
 			NppGUI & nppGUI = const_cast<NppGUI &>((NppParameters::getInstance())->getNppGUI());
 			::ShowWindow(_pPublicInterface->getHSelf(), nppGUI._isMaximized?SW_MAXIMIZE:SW_SHOW);
+
+			// Send sizing info to make window fit (specially to show tool bar. Fixed issue #2600)
+			::SendMessage(_pPublicInterface->getHSelf(), WM_SIZE, 0, 0);
 			fileOpen();
 		}
 		break;

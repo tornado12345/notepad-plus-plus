@@ -43,18 +43,17 @@ If ErrorLevel 1 goto End
 signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin64\updater\libcurl.dll
 If ErrorLevel 1 goto End
 
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\updater\gpup.exe
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\NppExport\NppExport.dll
 If ErrorLevel 1 goto End
-
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\NppExport.dll
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\mimeTools\mimeTools.dll
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin64\plugins\mimeTools\mimeTools.dll
 If ErrorLevel 1 goto End
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\mimeTools.dll
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin64\plugins\mimeTools.dll
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\NppConverter\NppConverter.dll
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin64\plugins\NppConverter\NppConverter.dll
 If ErrorLevel 1 goto End
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\NppConverter.dll
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin64\plugins\NppConverter.dll
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\DSpellCheck\DSpellCheck.dll
 If ErrorLevel 1 goto End
-signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin\plugins\PluginManager.dll
+signtool.exe sign /f %NPP_CERT% /p %NPP_CERT_PWD% /d "Notepad++" /du https://notepad-plus-plus.org/ /t http://timestamp.digicert.com/ ..\bin64\plugins\DSpellCheck\DSpellCheck.dll
 If ErrorLevel 1 goto End
 
 :NoSign
@@ -121,6 +120,10 @@ mkdir .\zipped.package.release\updater
 mkdir .\zipped.package.release\localization
 mkdir .\zipped.package.release\themes
 mkdir .\zipped.package.release\plugins
+mkdir .\zipped.package.release\plugins\NppExport
+mkdir .\zipped.package.release\plugins\mimeTools
+mkdir .\zipped.package.release\plugins\NppConverter
+mkdir .\zipped.package.release\plugins\DSpellCheck
 mkdir .\zipped.package.release\plugins\APIs
 mkdir .\zipped.package.release\plugins\Config
 mkdir .\zipped.package.release\plugins\doc
@@ -132,10 +135,14 @@ mkdir .\zipped.package.release64\updater
 mkdir .\zipped.package.release64\localization
 mkdir .\zipped.package.release64\themes
 mkdir .\zipped.package.release64\plugins
+mkdir .\zipped.package.release64\plugins\mimeTools
+mkdir .\zipped.package.release64\plugins\NppConverter
+mkdir .\zipped.package.release64\plugins\DSpellCheck
 mkdir .\zipped.package.release64\plugins\APIs
 mkdir .\zipped.package.release64\plugins\Config
 mkdir .\zipped.package.release64\plugins\doc
 
+rem 32
 copy /Y ..\bin\license.txt .\zipped.package.release\
 If ErrorLevel 1 goto End
 copy /Y ..\bin\readme.txt .\zipped.package.release\
@@ -159,75 +166,7 @@ If ErrorLevel 1 goto End
 copy /Y ..\bin\SciLexer.dll .\zipped.package.release\
 If ErrorLevel 1 goto End
 
-
-rem Plugins
-copy /Y "..\bin\plugins\NppExport.dll" .\zipped.package.release\plugins\
-If ErrorLevel 1 goto End
-copy /Y "..\bin\plugins\mimeTools.dll" .\zipped.package.release\plugins\
-If ErrorLevel 1 goto End
-copy /Y "..\bin\plugins\NppConverter.dll" .\zipped.package.release\plugins\
-If ErrorLevel 1 goto End
-
-copy /Y "..\bin64\plugins\mimeTools.dll" .\zipped.package.release64\plugins\
-If ErrorLevel 1 goto End
-copy /Y "..\bin64\plugins\NppConverter.dll" .\zipped.package.release64\plugins\
-If ErrorLevel 1 goto End
-
-
-rem plugins manager and its updater 
-copy /Y "..\bin\plugins\PluginManager.dll" .\zipped.package.release\plugins\
-If ErrorLevel 1 goto End
-copy /Y "..\bin\updater\gpup.exe" .\zipped.package.release\updater\
-If ErrorLevel 1 goto End
-
-
-rem localizations
-copy /Y ".\nativeLang\*.xml" .\zipped.package.release\localization\
-If ErrorLevel 1 goto End
-copy /Y ".\nativeLang\*.xml" .\zipped.package.release64\localization\
-If ErrorLevel 1 goto End
-
-rem files API
-copy /Y ".\APIs\*.xml" .\zipped.package.release\plugins\APIs\
-If ErrorLevel 1 goto End
-copy /Y ".\APIs\*.xml" .\zipped.package.release64\plugins\APIs\
-If ErrorLevel 1 goto End
-
-rem theme
-copy /Y ".\themes\*.xml" .\zipped.package.release\themes\
-If ErrorLevel 1 goto End
-copy /Y ".\themes\*.xml" .\zipped.package.release64\themes\
-If ErrorLevel 1 goto End
-
-
-
-
-"C:\Program Files\7-Zip\7z.exe" a -r .\build\npp.bin.minimalist.7z .\minimalist\*
-If ErrorLevel 1 goto End
-"C:\Program Files\7-Zip\7z.exe" a -r .\build\npp.bin.minimalist64.7z .\minimalist64\*
-If ErrorLevel 1 goto End
-
-
-"C:\Program Files\7-Zip\7z.exe" a -tzip -r .\build\npp.bin.zip .\zipped.package.release\*
-If ErrorLevel 1 goto End
-"C:\Program Files\7-Zip\7z.exe" a -r .\build\npp.bin.7z .\zipped.package.release\*
-If ErrorLevel 1 goto End
-rem IF EXIST "%PROGRAMFILES(X86)%" ("%PROGRAMFILES(x86)%\NSIS\Unicode\makensis.exe" nppSetup.nsi) ELSE ("%PROGRAMFILES%\NSIS\Unicode\makensis.exe" nppSetup.nsi)
-IF EXIST "%PROGRAMFILES(X86)%" ("%PROGRAMFILES(x86)%\NSIS\makensis.exe" nppSetup.nsi) ELSE ("%PROGRAMFILES%\NSIS\makensis.exe" nppSetup.nsi)
-IF EXIST "%PROGRAMFILES(X86)%" ("%PROGRAMFILES(x86)%\NSIS\makensis.exe" -DARCH64 nppSetup.nsi) ELSE ("%PROGRAMFILES%\NSIS\makensis.exe" -DARCH64 nppSetup.nsi)
-
-rem Notepad++ Unicode package
-rmdir /S /Q .\zipped.package.release
-
-mkdir .\zipped.package.release64
-rem mkdir .\zipped.package.release64\updater
-mkdir .\zipped.package.release64\localization
-mkdir .\zipped.package.release64\themes
-mkdir .\zipped.package.release64\plugins
-mkdir .\zipped.package.release64\plugins\APIs
-mkdir .\zipped.package.release64\plugins\Config
-mkdir .\zipped.package.release64\plugins\doc
-
+rem 64
 copy /Y ..\bin\license.txt .\zipped.package.release64\
 If ErrorLevel 1 goto End
 copy /Y ..\bin\readme.txt .\zipped.package.release64\
@@ -251,6 +190,79 @@ If ErrorLevel 1 goto End
 copy /Y ..\bin64\SciLexer.dll .\zipped.package.release64\
 If ErrorLevel 1 goto End
 
+
+rem Plugins
+copy /Y "..\bin\plugins\NppExport\NppExport.dll" .\zipped.package.release\plugins\NppExport\
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\mimeTools\mimeTools.dll" .\zipped.package.release\plugins\mimeTools\
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\NppConverter\NppConverter.dll" .\zipped.package.release\plugins\NppConverter\
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\DSpellCheck\DSpellCheck.dll" .\zipped.package.release\plugins\DSpellCheck\
+If ErrorLevel 1 goto End
+mkdir .\zipped.package.release\plugins\Config\Hunspell
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\Config\DSpellCheckDefaultDisabled\DSpellCheck.ini" .\zipped.package.release\plugins\Config\
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\Config\Hunspell\en_US.aff" .\zipped.package.release\plugins\Config\Hunspell\
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\Config\Hunspell\en_US.dic" .\zipped.package.release\plugins\Config\Hunspell\
+If ErrorLevel 1 goto End
+
+copy /Y "..\bin64\plugins\mimeTools\mimeTools.dll" .\zipped.package.release64\plugins\mimeTools\
+If ErrorLevel 1 goto End
+copy /Y "..\bin64\plugins\NppConverter\NppConverter.dll" .\zipped.package.release64\plugins\NppConverter\
+If ErrorLevel 1 goto End
+copy /Y "..\bin64\plugins\DSpellCheck\DSpellCheck.dll" .\zipped.package.release64\plugins\DSpellCheck\
+If ErrorLevel 1 goto End
+mkdir .\zipped.package.release64\plugins\Config\Hunspell
+If ErrorLevel 1 goto End
+copy /Y "..\bin\plugins\Config\DSpellCheckDefaultDisabled\DSpellCheck.ini" .\zipped.package.release64\plugins\Config\
+If ErrorLevel 1 goto End
+copy /Y "..\bin64\plugins\Config\Hunspell\en_US.aff" .\zipped.package.release64\plugins\Config\Hunspell\
+If ErrorLevel 1 goto End
+copy /Y "..\bin64\plugins\Config\Hunspell\en_US.dic" .\zipped.package.release64\plugins\Config\Hunspell\
+If ErrorLevel 1 goto End
+
+
+rem localizations
+copy /Y ".\nativeLang\*.xml" .\zipped.package.release\localization\
+If ErrorLevel 1 goto End
+copy /Y ".\nativeLang\*.xml" .\zipped.package.release64\localization\
+If ErrorLevel 1 goto End
+
+rem files API
+copy /Y ".\APIs\*.xml" .\zipped.package.release\plugins\APIs\
+If ErrorLevel 1 goto End
+copy /Y ".\APIs\*.xml" .\zipped.package.release64\plugins\APIs\
+If ErrorLevel 1 goto End
+
+rem theme
+copy /Y ".\themes\*.xml" .\zipped.package.release\themes\
+If ErrorLevel 1 goto End
+copy /Y ".\themes\*.xml" .\zipped.package.release64\themes\
+If ErrorLevel 1 goto End
+
+
+
+"C:\Program Files\7-Zip\7z.exe" a -r .\build\npp.bin.minimalist.7z .\minimalist\*
+If ErrorLevel 1 goto End
+"C:\Program Files\7-Zip\7z.exe" a -r .\build\npp.bin.minimalist64.7z .\minimalist64\*
+If ErrorLevel 1 goto End
+
+
+"C:\Program Files\7-Zip\7z.exe" a -tzip -r .\build\npp.bin.zip .\zipped.package.release\*
+If ErrorLevel 1 goto End
+"C:\Program Files\7-Zip\7z.exe" a -r .\build\npp.bin.7z .\zipped.package.release\*
+If ErrorLevel 1 goto End
+rem IF EXIST "%PROGRAMFILES(X86)%" ("%PROGRAMFILES(x86)%\NSIS\Unicode\makensis.exe" nppSetup.nsi) ELSE ("%PROGRAMFILES%\NSIS\Unicode\makensis.exe" nppSetup.nsi)
+IF EXIST "%PROGRAMFILES(X86)%" ("%PROGRAMFILES(x86)%\NSIS\makensis.exe" nppSetup.nsi) ELSE ("%PROGRAMFILES%\NSIS\makensis.exe" nppSetup.nsi)
+IF EXIST "%PROGRAMFILES(X86)%" ("%PROGRAMFILES(x86)%\NSIS\makensis.exe" -DARCH64 nppSetup.nsi) ELSE ("%PROGRAMFILES%\NSIS\makensis.exe" -DARCH64 nppSetup.nsi)
+
+rem Notepad++ Unicode package
+rmdir /S /Q .\zipped.package.release
+
+rem 
 "C:\Program Files\7-Zip\7z.exe" a -tzip -r .\build\npp.bin64.zip .\zipped.package.release64\*
 If ErrorLevel 1 goto End
 
@@ -268,10 +280,11 @@ for %%a in (npp.*.Installer.exe) do (
   rem echo a = %%a
   set nppInstallerVar=%%a
   set nppInstallerVar64=!nppInstallerVar:Installer.exe=Installer.x64.exe!
-		
-		rem nppInstallerVar should be the version for exemple: 6.9
-		rem we put npp.6.9. + (bin.zip instead of Installer.exe) into var zipvar
+
+  rem nppInstallerVar should be the version for exemple: 6.9
+  rem we put npp.6.9. + (bin.zip instead of Installer.exe) into var zipvar
   set zipvar=!nppInstallerVar:Installer.exe=bin.zip!
+
   set zipvar64=!nppInstallerVar:Installer.exe=bin.x64.zip!
   set 7zvar=!nppInstallerVar:Installer.exe=bin.7z!
   set 7zvar64=!nppInstallerVar:Installer.exe=bin.x64.7z!

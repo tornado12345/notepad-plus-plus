@@ -25,28 +25,28 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-
+#include <memory>
 #include <shlwapi.h>
 #include "ScintillaEditView.h"
 #include "Parameters.h"
 #include "Sorters.h"
 #include "tchar.h"
-#include <memory>
+#include "verifySignedFile.h"
 
 using namespace std;
 
 // initialize the static variable
 
 // get full ScinLexer.dll path to avoid hijack
-TCHAR * getSciLexerFullPathName(TCHAR * moduleFileName, size_t len){
+TCHAR * getSciLexerFullPathName(TCHAR * moduleFileName, size_t len)
+{
 	::GetModuleFileName(NULL, moduleFileName, static_cast<int32_t>(len));
 	::PathRemoveFileSpec(moduleFileName);
 	::PathAppend(moduleFileName, TEXT("SciLexer.dll"));
 	return moduleFileName;
 };
 
-TCHAR moduleFileName[1024];
-HINSTANCE ScintillaEditView::_hLib = ::LoadLibrary(getSciLexerFullPathName(moduleFileName, 1024));
+HINSTANCE ScintillaEditView::_hLib = loadSciLexerDll();
 int ScintillaEditView::_refCount = 0;
 UserDefineDialog ScintillaEditView::_userDefineDlg;
 
@@ -56,6 +56,8 @@ const int ScintillaEditView::_SC_MARGE_FOLDER = 2;
 //const int ScintillaEditView::_SC_MARGE_MODIFMARKER = 3;
 
 WNDPROC ScintillaEditView::_scintillaDefaultProc = NULL;
+string ScintillaEditView::_defaultCharList = "";
+
 /*
 SC_MARKNUM_*     | Arrow               Plus/minus           Circle tree                 Box tree
 -------------------------------------------------------------------------------------------------------------
@@ -94,7 +96,7 @@ LanguageName ScintillaEditView::langNames[L_EXTERNAL+1] = {
 {TEXT("batch"),			TEXT("Batch"),				TEXT("Batch file"),										L_BATCH,		SCLEX_BATCH},
 {TEXT("ini"),			TEXT("ini"),				TEXT("MS ini file"),									L_INI,			SCLEX_PROPERTIES},
 {TEXT("nfo"),			TEXT("NFO"),				TEXT("MSDOS Style/ASCII Art"),							L_ASCII,		SCLEX_NULL},
-{TEXT("udf"),			TEXT("udf"),				TEXT("User Define File"),								L_USER,			SCLEX_USER},
+{TEXT("udf"),			TEXT("udf"),				TEXT("User Defined language file"),						L_USER,			SCLEX_USER},
 {TEXT("asp"),			TEXT("ASP"),				TEXT("Active Server Pages script file"),				L_ASP,			SCLEX_HTML},
 {TEXT("sql"),			TEXT("SQL"),				TEXT("Structured Query Language file"),					L_SQL,			SCLEX_SQL},
 {TEXT("vb"),			TEXT("Visual Basic"),		TEXT("Visual Basic file"),								L_VB,			SCLEX_VB},
@@ -139,12 +141,42 @@ LanguageName ScintillaEditView::langNames[L_EXTERNAL+1] = {
 {TEXT("json"),			TEXT("json"),				TEXT("JSON file"),										L_JSON,			SCLEX_CPP },
 {TEXT("javascript.js"), TEXT("JavaScript"),			TEXT("JavaScript file"),								L_JAVASCRIPT,	SCLEX_CPP },
 {TEXT("fortran77"),		TEXT("Fortran fixed form"),	TEXT("Fortran fixed form source file"),					L_FORTRAN_77,	SCLEX_F77},
+{TEXT("baanc"),			TEXT("BaanC"),				TEXT("BaanC File"),										L_BAANC,		SCLEX_BAAN },
+{TEXT("srec"),			TEXT("S-Record"),			TEXT("Motorola S-Record binary data"),					L_SREC,			SCLEX_SREC},
+{TEXT("ihex"),			TEXT("Intel HEX"),			TEXT("Intel HEX binary data"),							L_IHEX,			SCLEX_IHEX},
+{TEXT("tehex"),			TEXT("Tektronix extended HEX"),	TEXT("Tektronix extended HEX binary data"),			L_TEHEX,		SCLEX_TEHEX},
+{TEXT("swift"),			TEXT("Swift"),              TEXT("Swift file"),										L_SWIFT,		SCLEX_CPP},
+{TEXT("asn1"),			TEXT("ASN.1"),				TEXT("Abstract Syntax Notation One file"),				L_ASN1,			SCLEX_ASN1},
+{TEXT("avs"),			TEXT("AviSynth"),			TEXT("AviSynth scripts files"),							L_AVS,			SCLEX_AVS},
+{TEXT("blitzbasic"),	TEXT("BlitzBasic"),			TEXT("BlitzBasic file"),								L_BLITZBASIC,	SCLEX_BLITZBASIC},
+{TEXT("purebasic"),		TEXT("PureBasic"),			TEXT("PureBasic file"),									L_PUREBASIC,	SCLEX_PUREBASIC},
+{TEXT("freebasic"),		TEXT("FreeBasic"),			TEXT("FreeBasic file"),									L_FREEBASIC,	SCLEX_FREEBASIC},
+{TEXT("csound"),		TEXT("Csound"),				TEXT("Csound file"),									L_CSOUND,		SCLEX_CSOUND},
+{TEXT("erlang"),		TEXT("Erlang"),				TEXT("Erlang file"),									L_ERLANG,		SCLEX_ERLANG},
+{TEXT("escript"),		TEXT("ESCRIPT"),			TEXT("ESCRIPT file"),									L_ESCRIPT,		SCLEX_ESCRIPT},
+{TEXT("forth"),			TEXT("Forth"),				TEXT("Forth file"),										L_FORTH,		SCLEX_FORTH},
+{TEXT("latex"),			TEXT("LaTeX"),				TEXT("LaTeX file"),										L_LATEX,		SCLEX_LATEX},
+{TEXT("mmixal"),		TEXT("MMIXAL"),				TEXT("MMIXAL file"),									L_MMIXAL,		SCLEX_MMIXAL},
+{TEXT("nimrod"),		TEXT("Nimrod"),				TEXT("Nimrod file"),									L_NIMROD,		SCLEX_NIMROD},
+{TEXT("nncrontab"),		TEXT("Nncrontab"),			TEXT("extended crontab file"),							L_NNCRONTAB,	SCLEX_NNCRONTAB},
+{TEXT("oscript"),		TEXT("OScript"),			TEXT("OScript source file"),							L_OSCRIPT,		SCLEX_OSCRIPT},
+{TEXT("rebol"),			TEXT("REBOL"),				TEXT("REBOL file"),										L_REBOL,		SCLEX_REBOL},
+{TEXT("registry"),		TEXT("registry"),			TEXT("registry file"),									L_REGISTRY,		SCLEX_REGISTRY},
+{TEXT("rust"),			TEXT("Rust"),				TEXT("Rust file"),										L_RUST,			SCLEX_RUST},
+{TEXT("spice"),			TEXT("Spice"),				TEXT("spice file"),										L_SPICE,		SCLEX_SPICE},
+{TEXT("txt2tags"),		TEXT("txt2tags"),			TEXT("txt2tags file"),									L_TXT2TAGS,		SCLEX_TXT2TAGS},
+{TEXT("visualprolog"),	TEXT("Visual Prolog"),		TEXT("Visual Prolog file"),								L_VISUALPROLOG,	SCLEX_VISUALPROLOG},
 {TEXT("ext"),			TEXT("External"),			TEXT("External"),										L_EXTERNAL,		SCLEX_NULL}
 };
 
 //const int MASK_RED   = 0xFF0000;
 //const int MASK_GREEN = 0x00FF00;
 //const int MASK_BLUE  = 0x0000FF;
+
+#define SCINTILLA_SIGNER_DISPLAY_NAME TEXT("Notepad++")
+#define SCINTILLA_SIGNER_SUBJECT TEXT("C=FR, S=Ile-de-France, L=Saint Cloud, O=\"Notepad++\", CN=\"Notepad++\"")
+#define SCINTILLA_SIGNER_KEY_ID TEXT("42C4C5846BB675C74E2B2C90C69AB44366401093")
+
 
 int getNbDigits(int aNum, int base)
 {
@@ -166,6 +198,31 @@ int getNbDigits(int aNum, int base)
 		nbChiffre += 1;
 
 	return nbChiffre;
+}
+
+TCHAR moduleFileName[1024];
+
+HMODULE loadSciLexerDll()
+{
+	generic_string sciLexerPath = getSciLexerFullPathName(moduleFileName, 1024);
+
+	// Do not check dll signature if npp is running in debug mode
+	// This is helpful for developers to skip signature checking
+	// while analyzing issue or modifying the lexer dll
+#ifndef _DEBUG
+	bool isOK = VerifySignedLibrary(sciLexerPath, SCINTILLA_SIGNER_KEY_ID, SCINTILLA_SIGNER_SUBJECT, SCINTILLA_SIGNER_DISPLAY_NAME, false, false);
+
+	if (!isOK)
+	{
+		::MessageBox(NULL,
+			TEXT("Authenticode check failed: signature or signing certificate are not recognized"),
+			TEXT("Library verification failed"),
+			MB_OK | MB_ICONERROR);
+		return nullptr;
+	}
+#endif // !_DEBUG
+
+	return ::LoadLibrary(sciLexerPath.c_str());
 }
 
 void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
@@ -282,6 +339,15 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	_callWindowProc = CallWindowProc;
 	_scintillaDefaultProc = reinterpret_cast<WNDPROC>(::SetWindowLongPtr(_hSelf, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(scintillaStatic_Proc)));
 
+	if (_defaultCharList.empty())
+	{
+		auto defaultCharListLen = execute(SCI_GETWORDCHARS);
+		char *defaultCharList = new char[defaultCharListLen + 1];
+		execute(SCI_GETWORDCHARS, 0, reinterpret_cast<LPARAM>(defaultCharList));
+		defaultCharList[defaultCharListLen] = '\0';
+		_defaultCharList = defaultCharList;
+		delete[] defaultCharList;
+	}
 	//Get the startup document and make a buffer for it so it can be accessed like a file
 	attachDefaultDoc();
 }
@@ -303,7 +369,7 @@ LRESULT CALLBACK ScintillaEditView::scintillaStatic_Proc(HWND hwnd, UINT Message
 		bool isSynpnatic = std::string(synapticsHack) == "SynTrackCursorWindowClass";
 		bool makeTouchPadCompetible = ((NppParameters::getInstance())->getSVP())._disableAdvancedScrolling;
 
-		if (isSynpnatic || makeTouchPadCompetible)
+		if (pScint && (isSynpnatic || makeTouchPadCompetible))
 			return (pScint->scintillaNew_Proc(hwnd, Message, wParam, lParam));
 
 		ScintillaEditView *pScintillaOnMouse = (ScintillaEditView *)(::GetWindowLongPtr(hwndOnMouse, GWLP_USERDATA));
@@ -578,6 +644,8 @@ void ScintillaEditView::setXmlLexer(LangType type)
 			execute(SCI_SETKEYWORDS, i, reinterpret_cast<LPARAM>(TEXT("")));
 
         makeStyle(type);
+
+		execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>("lexer.xml.allow.scripts"), reinterpret_cast<LPARAM>("0"));
 	}
 	else if ((type == L_HTML) || (type == L_PHP) || (type == L_ASP) || (type == L_JSP))
 	{
@@ -909,13 +977,10 @@ void ScintillaEditView::setJsLexer()
 	LexerStyler *pNewStyler = (_pParameter->getLStylerArray()).getLexerStylerByName(newLexerName);
 	if (pNewStyler) // New js styler is available, so we can use it do more modern styling
 	{
-		if (pNewStyler)
+		for (int i = 0, nb = pNewStyler->getNbStyler(); i < nb; ++i)
 		{
-			for (int i = 0, nb = pNewStyler->getNbStyler(); i < nb; ++i)
-			{
-				Style & style = pNewStyler->getStyler(i);
-				setStyle(style);
-			}
+			Style & style = pNewStyler->getStyler(i);
+			setStyle(style);
 		}
 
 		basic_string<char> keywordListInstruction("");
@@ -1037,7 +1102,6 @@ void ScintillaEditView::setTclLexer()
 	execute(SCI_SETKEYWORDS, 1, reinterpret_cast<LPARAM>(tclTypes));
 }
 
-//used by Objective-C and Actionscript
 void ScintillaEditView::setObjCLexer(LangType langType)
 {
     execute(SCI_SETLEXER, SCLEX_OBJC);
@@ -1179,6 +1243,57 @@ void ScintillaEditView::makeStyle(LangType language, const TCHAR **keywordArray)
 			}
 		}
 	}
+}
+
+void ScintillaEditView::restoreDefaultWordChars()
+{
+	execute(SCI_SETWORDCHARS, 0, reinterpret_cast<LPARAM>(_defaultCharList.c_str()));
+}
+
+void ScintillaEditView::addCustomWordChars()
+{
+	NppParameters *pNppParam = NppParameters::getInstance();
+	const NppGUI & nppGUI = pNppParam->getNppGUI();
+
+	if (nppGUI._customWordChars.empty())
+		return;
+
+	string chars2addStr;
+	for (size_t i = 0; i < nppGUI._customWordChars.length(); ++i)
+	{
+		bool found = false;
+		char char2check = nppGUI._customWordChars[i];
+		for (size_t j = 0; j < _defaultCharList.length(); ++j)
+		{
+			char wordChar = _defaultCharList[j];
+			if (char2check == wordChar)
+			{
+				found = true;
+				break;
+			}
+		}
+		if (not found)
+		{
+			chars2addStr.push_back(char2check);
+		}
+	}
+
+	if (not chars2addStr.empty())
+	{
+		string newCharList = _defaultCharList;
+		newCharList += chars2addStr;
+		execute(SCI_SETWORDCHARS, 0, reinterpret_cast<LPARAM>(newCharList.c_str()));
+	}
+}
+
+void ScintillaEditView::setWordChars()
+{
+	NppParameters *pNppParam = NppParameters::getInstance();
+	const NppGUI & nppGUI = pNppParam->getNppGUI();
+	if (nppGUI._isWordCharDefault)
+		restoreDefaultWordChars();
+	else
+		addCustomWordChars();
 }
 
 void ScintillaEditView::defineDocType(LangType typeDoc)
@@ -1323,6 +1438,7 @@ void ScintillaEditView::defineDocType(LangType typeDoc)
 		case L_RC :
 		case L_CS :
 		case L_FLASH :
+		case L_SWIFT:
 			setCppLexer(typeDoc); break;
 
 		case L_JS:
@@ -1507,6 +1623,78 @@ void ScintillaEditView::defineDocType(LangType typeDoc)
 		case L_COFFEESCRIPT :
 			setCoffeeScriptLexer(); break;
 
+		case L_BAANC:
+			setBaanCLexer(); break;
+
+		case L_SREC :
+			setSrecLexer(); break;
+
+		case L_IHEX :
+			setIHexLexer(); break;
+
+		case L_TEHEX :
+			setTEHexLexer(); break;
+
+		case L_ASN1 :
+			setAsn1Lexer(); break;
+
+		case L_AVS :
+			setAVSLexer(); break;
+
+		case L_BLITZBASIC :
+			setBlitzBasicLexer(); break;
+
+		case L_PUREBASIC :
+			setPureBasicLexer(); break;
+
+		case L_FREEBASIC :
+			setFreeBasicLexer(); break;
+
+		case L_CSOUND :
+			setCsoundLexer(); break;
+
+		case L_ERLANG :
+			setErlangLexer(); break;
+
+		case L_ESCRIPT :
+			setESCRIPTLexer(); break;
+
+		case L_FORTH :
+			setForthLexer(); break;
+
+		case L_LATEX :
+			setLatexLexer(); break;
+
+		case L_MMIXAL :
+			setMMIXALLexer(); break;
+
+		case L_NIMROD :
+			setNimrodLexer(); break;
+
+		case L_NNCRONTAB :
+			setNncrontabLexer(); break;
+
+		case L_OSCRIPT :
+			setOScriptLexer(); break;
+
+		case L_REBOL :
+			setREBOLLexer(); break;
+
+		case L_REGISTRY :
+			setRegistryLexer(); break;
+
+		case L_RUST :
+			setRustLexer(); break;
+
+		case L_SPICE :
+			setSpiceLexer(); break;
+
+		case L_TXT2TAGS :
+			setTxt2tagsLexer(); break;
+
+		case L_VISUALPROLOG:
+			setVisualPrologLexer(); break;
+
 		case L_TEXT :
 		default :
 			if (typeDoc >= L_EXTERNAL && typeDoc < _pParameter->L_END)
@@ -1598,7 +1786,8 @@ void ScintillaEditView::restoreCurrentPos()
 	execute(SCI_SETANCHOR, pos._startPos);
 	execute(SCI_SETCURRENTPOS, pos._endPos);
 	execute(SCI_CANCEL);							//disable
-	if (!isWrap()) {	//only offset if not wrapping, otherwise the offset isnt needed at all
+	if (not isWrap()) //only offset if not wrapping, otherwise the offset isnt needed at all
+	{
 		execute(SCI_SETSCROLLWIDTH, pos._scrollWidth);
 		execute(SCI_SETXOFFSET, pos._xOffset);
 	}
@@ -1648,7 +1837,8 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 	// Due to execute(SCI_CLEARDOCUMENTSTYLE); in defineDocType() function
 	// defineDocType() function should be called here, but not be after the fold info loop
 	defineDocType(_currentBuffer->getLangType());
-    setTabSettings(_currentBuffer->getCurrentLang());
+
+	setWordChars();
 
 	if (_currentBuffer->getNeedsLexing()) {
 		restyleBuffer();
@@ -1674,8 +1864,8 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 
 void ScintillaEditView::getCurrentFoldStates(std::vector<size_t> & lineStateVector)
 {
-	//-- FLS: xCodeOptimization1304: For active document get folding state from Scintilla.
-	//--      The code using SCI_CONTRACTEDFOLDNEXT is usually 10%-50% faster than checking each line of the document!!
+	// xCodeOptimization1304: For active document get folding state from Scintilla.
+	// The code using SCI_CONTRACTEDFOLDNEXT is usually 10%-50% faster than checking each line of the document!!
 	size_t contractedFoldHeaderLine = 0;
 
 	do {
@@ -2238,23 +2428,8 @@ void ScintillaEditView::performGlobalStyles()
 	execute(SCI_SETFOLDMARGINCOLOUR, true, foldMarginColor);
 	execute(SCI_SETFOLDMARGINHICOLOUR, true, foldMarginHiColor);
 
-	COLORREF foldfgColor = white;
-	COLORREF foldbgColor = grey;
-	i = stylers.getStylerIndexByName(TEXT("Fold"));
-	if (i != -1)
-	{
-		Style & style = stylers.getStyler(i);
-		foldfgColor = style._bgColor;
-		foldbgColor = style._fgColor;
-	}
-
-	COLORREF activeFoldFgColor = red;
-	i = stylers.getStylerIndexByName(TEXT("Fold active"));
-	if (i != -1)
-	{
-		Style & style = stylers.getStyler(i);
-		activeFoldFgColor = style._fgColor;
-	}
+	COLORREF foldfgColor = white, foldbgColor = grey, activeFoldFgColor = red;
+	getFoldColor(foldfgColor, foldbgColor, activeFoldFgColor);
 
 	ScintillaViewParams & svp = (ScintillaViewParams &)_pParameter->getSVP();
 	for (int j = 0 ; j < NB_FOLDER_STATE ; ++j)
@@ -2761,6 +2936,11 @@ void ScintillaEditView::columnReplace(ColumnModeInfos & cmi, int initial, int in
 {
 	assert(repeat > 0);
 
+	// If there is no column mode info available, no need to do anything
+	// If required a message can be shown to user, that select column properly or something similar
+	// It is just a double check as taken in callee method (in case this method is called from multiple places)
+	if (cmi.size() <= 0)
+		return;
 	// 0000 00 00 : Dec BASE_10
 	// 0000 00 01 : Hex BASE_16
 	// 0000 00 10 : Oct BASE_08
@@ -2920,12 +3100,12 @@ void ScintillaEditView::hideLines()
 	int endLine = static_cast<int32_t>(execute(SCI_LINEFROMPOSITION, execute(SCI_GETSELECTIONEND)));
 	//perform range check: cannot hide very first and very last lines
 	//Offset them one off the edges, and then check if they are within the reasonable
-	int nrLines = static_cast<int32_t>(execute(SCI_GETLINECOUNT));
-	if (nrLines < 3)
+	int nbLines = static_cast<int32_t>(execute(SCI_GETLINECOUNT));
+	if (nbLines < 3)
 		return;	//cannot possibly hide anything
 	if (!startLine)
 		++startLine;
-	if (endLine == (nrLines-1))
+	if (endLine == (nbLines-1))
 		--endLine;
 
 	if (startLine > endLine)
@@ -3128,7 +3308,7 @@ void ScintillaEditView::setTabSettings(Lang *lang)
 		if (lang->_langID == L_JAVASCRIPT)
 		{
 			Lang *ljs = _pParameter->getLangFromID(L_JS);
-			execute(SCI_SETTABWIDTH, ljs->_tabSize);
+			execute(SCI_SETTABWIDTH, ljs->_tabSize > 0 ? ljs->_tabSize : lang->_tabSize);
 			execute(SCI_SETUSETABS, !ljs->_isTabReplacedBySpace);
 			return;
 		}
@@ -3138,7 +3318,7 @@ void ScintillaEditView::setTabSettings(Lang *lang)
     else
     {
         const NppGUI & nppgui = _pParameter->getNppGUI();
-        execute(SCI_SETTABWIDTH, nppgui._tabSize);
+        execute(SCI_SETTABWIDTH, nppgui._tabSize  > 0 ? nppgui._tabSize : lang->_tabSize);
 		execute(SCI_SETUSETABS, !nppgui._tabReplacedBySpace);
     }
 }
@@ -3257,4 +3437,24 @@ void ScintillaEditView::setBorderEdge(bool doWithBorderEdge)
 
 	::SetWindowLongPtr(_hSelf, GWL_EXSTYLE, exStyle);
 	::SetWindowPos(_hSelf, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+}
+
+void ScintillaEditView::getFoldColor(COLORREF& fgColor, COLORREF& bgColor, COLORREF& activeFgColor)
+{
+	StyleArray & stylers = _pParameter->getMiscStylerArray();
+
+	int i = stylers.getStylerIndexByName(TEXT("Fold"));
+	if (i != -1)
+	{
+		Style & style = stylers.getStyler(i);
+		fgColor = style._bgColor;
+		bgColor = style._fgColor;
+	}
+
+	i = stylers.getStylerIndexByName(TEXT("Fold active"));
+	if (i != -1)
+	{
+		Style & style = stylers.getStyler(i);
+		activeFgColor = style._fgColor;
+	}
 }

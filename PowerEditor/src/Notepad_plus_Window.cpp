@@ -148,11 +148,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		::SetWindowPlacement(_hSelf,&posInfo);
 	}
 
-
-	// avoid useless drawing
-	//PaintLocker paintLocker(_hSelf);
-
-	if (0 != (nppGUI._tabStatus & TAB_MULTILINE))
+	if ((nppGUI._tabStatus & TAB_MULTILINE) != 0)
 		::SendMessage(_hSelf, WM_COMMAND, IDM_VIEW_DRAWTABBAR_MULTILINE, 0);
 
 	if (!nppGUI._menuBarShow)
@@ -248,15 +244,12 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	scnN.nmhdr.idFrom = 0;
 	_notepad_plus_plus_core._pluginsManager.notify(&scnN);
 
-	if (not cmdLineParams->_easterEggName.empty())
+	if (!cmdLineParams->_easterEggName.empty())
 	{
-		char dest[MAX_PATH];
-		wcstombs(dest, (cmdLineParams->_easterEggName).c_str(), sizeof(dest));
-
 		//::MessageBoxA(NULL, destStr.c_str(), "", MB_OK);
 		if (cmdLineParams->_quoteType == 0) // Easter Egg Name
 		{
-			int iQuote = _notepad_plus_plus_core.getQuoteIndexFrom(dest);
+			int iQuote = _notepad_plus_plus_core.getQuoteIndexFrom(cmdLineParams->_easterEggName.c_str());
 			if (iQuote != -1)
 			{
 				_notepad_plus_plus_core.showQuoteFromIndex(iQuote);
@@ -264,19 +257,44 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		}
 		else if (cmdLineParams->_quoteType == 1) // command line quote
 		{
-			_userQuote = dest;
-			_notepad_plus_plus_core.showQuote(_userQuote.c_str(), "Anonymous #999", false);
+			_userQuote = cmdLineParams->_easterEggName;
+			_quoteParams.reset();
+			_quoteParams._quote = _userQuote.c_str();
+			_quoteParams._quoter = TEXT("Anonymous #999");
+			_quoteParams._shouldBeTrolling = false;
+			_quoteParams._lang = cmdLineParams->_langType;
+			if (cmdLineParams->_ghostTypingSpeed == 1)
+				_quoteParams._speed = QuoteParams::slow;
+			else if (cmdLineParams->_ghostTypingSpeed == 2)
+				_quoteParams._speed = QuoteParams::rapid;
+			else if (cmdLineParams->_ghostTypingSpeed == 3)
+				_quoteParams._speed = QuoteParams::speedOfLight;
+
+			_notepad_plus_plus_core.showQuote(&_quoteParams);
 		}
 		else if (cmdLineParams->_quoteType == 2) // content drom file
 		{
-			std::string destStr = dest;
-			generic_string fileName(destStr.begin(), destStr.end());
-
-			if (::PathFileExists(fileName.c_str()))
+			if (::PathFileExists(cmdLineParams->_easterEggName.c_str()))
 			{
-				_userQuote = getFileContent(fileName.c_str());
-				if (_userQuote != "")
-					_notepad_plus_plus_core.showQuote(_userQuote.c_str(), "Anonymous #999", false);
+				std::string content = getFileContent(cmdLineParams->_easterEggName.c_str());
+				WcharMbcsConvertor *wmc = WcharMbcsConvertor::getInstance();
+				_userQuote = wmc->char2wchar(content.c_str(), SC_CP_UTF8);
+				if (!_userQuote.empty())
+				{
+					_quoteParams.reset();
+					_quoteParams._quote = _userQuote.c_str();
+					_quoteParams._quoter = TEXT("Anonymous #999");
+					_quoteParams._shouldBeTrolling = false;
+					_quoteParams._lang = cmdLineParams->_langType;
+					if (cmdLineParams->_ghostTypingSpeed == 1)
+						_quoteParams._speed = QuoteParams::slow;
+					else if (cmdLineParams->_ghostTypingSpeed == 2)
+						_quoteParams._speed = QuoteParams::rapid;
+					else if (cmdLineParams->_ghostTypingSpeed == 3)
+						_quoteParams._speed = QuoteParams::speedOfLight;
+
+					_notepad_plus_plus_core.showQuote(&_quoteParams);
+				}
 			}
 		}
 	}
@@ -298,6 +316,15 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		// Lauch backup task
 		_notepad_plus_plus_core.launchDocumentBackupTask();
 	}
+
+	// Make this call later to take effect
+	::SendMessage(_hSelf, NPPM_INTERNAL_SETWORDCHARS, 0, 0);
+
+	if (pNppParams->doFunctionListExport())
+		::SendMessage(_hSelf, NPPM_INTERNAL_EXPORTFUNCLISTANDQUIT, 0, 0);
+
+	if (pNppParams->doPrintAndExit())
+		::SendMessage(_hSelf, NPPM_INTERNAL_PRNTANDQUIT, 0, 0);
 }
 
 
@@ -306,6 +333,9 @@ bool Notepad_plus_Window::isDlgsMsg(MSG *msg) const
 	for (size_t i = 0, len = _notepad_plus_plus_core._hModelessDlgs.size(); i < len; ++i)
 	{
 		if (_notepad_plus_plus_core.processIncrFindAccel(msg))
+			return true;
+
+		if (_notepad_plus_plus_core.processFindAccel(msg))
 			return true;
 
 		if (::IsDialogMessageW(_notepad_plus_plus_core._hModelessDlgs[i], msg))

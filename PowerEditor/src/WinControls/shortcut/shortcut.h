@@ -32,6 +32,7 @@
 #include "Scintilla.h"
 #include "StaticDialog.h"
 #include "Common.h"
+#include "menuCmdID.h"
 
 const size_t nameLenMax = 64;
 
@@ -174,6 +175,14 @@ public:
 
 	void setName(const TCHAR * name);
 
+	void clear(){
+		_keyCombo._isCtrl = false;
+		_keyCombo._isAlt = false;
+		_keyCombo._isShift = false;
+		_keyCombo._key = 0;
+		return;
+	}
+
 protected :
 	KeyCombo _keyCombo;
 	virtual INT_PTR CALLBACK run_dlgProc(UINT Message, WPARAM wParam, LPARAM lParam);
@@ -185,12 +194,14 @@ protected :
 		 
 class CommandShortcut : public Shortcut {
 public:
-	CommandShortcut(Shortcut sc, long id) :	Shortcut(sc), _id(id) {};
+	CommandShortcut(Shortcut sc, long id);
 	unsigned long getID() const {return _id;};
 	void setID(unsigned long id) { _id = id;};
+	const TCHAR * getCategory() const { return _category.c_str(); };
 
 private :
 	unsigned long _id;
+	generic_string _category;
 };
 
 
@@ -340,12 +351,14 @@ private :
 class Accelerator { //Handles accelerator keys for Notepad++ menu, including custom commands
 friend class ShortcutMapper;
 public:
-	Accelerator() :_hAccelMenu(NULL), _hMenuParent(NULL), _hAccTable(NULL), _hIncFindAccTab(NULL), _pAccelArray(NULL), _nbAccelItems(0){};
+	Accelerator() {};
 	~Accelerator() {
 		if (_hAccTable)
 			::DestroyAcceleratorTable(_hAccTable);
 		if (_hIncFindAccTab)
 			::DestroyAcceleratorTable(_hIncFindAccTab);
+		if (_hFindAccTab)
+			::DestroyAcceleratorTable(_hFindAccTab);
 		if (_pAccelArray)
 			delete [] _pAccelArray;
 	};
@@ -356,17 +369,19 @@ public:
 	};
 	HACCEL getAccTable() const {return _hAccTable;};
 	HACCEL getIncrFindAccTable() const { return _hIncFindAccTab; };
+	HACCEL getFindAccTable() const { return _hFindAccTab; };
 
 	void updateShortcuts();
 	void updateFullMenu();
 
 private:
-	HMENU _hAccelMenu;
-	HWND _hMenuParent;
-	HACCEL _hAccTable;
-	HACCEL _hIncFindAccTab;
-	ACCEL *_pAccelArray;
-	int _nbAccelItems;
+	HMENU _hAccelMenu = nullptr;
+	HWND _hMenuParent = nullptr;
+	HACCEL _hAccTable = nullptr;
+	HACCEL _hIncFindAccTab = nullptr;
+	HACCEL _hFindAccTab = nullptr;
+	ACCEL *_pAccelArray = nullptr;
+	int _nbAccelItems = 0;
 
 	void updateMenuItemByCommand(CommandShortcut csc);
 };
@@ -376,7 +391,6 @@ public:
 	ScintillaAccelerator() {};
 	void init(std::vector<HWND> * vScintillas, HMENU hMenu, HWND menuParent);
 	void updateKeys();
-	void updateKey(ScintillaKeyMap skmOld, ScintillaKeyMap skm);
 	size_t nbScintillas() { return _vScintillas.size(); };
 private:
 	HMENU _hAccelMenu = nullptr;

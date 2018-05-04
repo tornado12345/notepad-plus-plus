@@ -26,8 +26,7 @@
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-#ifndef WORD_STYLE_H
-#define WORD_STYLE_H
+#pragma once
 
 #include "ColourPicker.h"
 #include "WordStyleDlgRes.h"
@@ -75,7 +74,7 @@ public :
         Window::init(hInst, parent);
 	};
 
-	virtual void create(int dialogID, bool isRTL = false);
+	virtual void create(int dialogID, bool isRTL = false, bool msgDestParent = true);
 
     void doDialog(bool isRTL = false) {
     	if (!isCreated())
@@ -97,9 +96,9 @@ public :
 		_gOverride2restored = (NppParameters::getInstance())->getGlobalOverrideStyle();
 	};
 
-    virtual void redraw() const {
-        _pFgColour->redraw();
-		_pBgColour->redraw();
+    virtual void redraw(bool forceUpdate = false) const {
+        _pFgColour->redraw(forceUpdate);
+		_pBgColour->redraw(forceUpdate);
 		::InvalidateRect(_hStyleInfoStaticText, NULL, TRUE);
 		::UpdateWindow(_hStyleInfoStaticText);
     };
@@ -238,5 +237,3 @@ private :
 		_isShownGOCtrls = show;
 	};
 };
-
-#endif //WORD_STYLE_H
