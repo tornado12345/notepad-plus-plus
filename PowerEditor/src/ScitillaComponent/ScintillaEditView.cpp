@@ -27,6 +27,7 @@
 
 #include <memory>
 #include <shlwapi.h>
+#include <cinttypes>
 #include "ScintillaEditView.h"
 #include "Parameters.h"
 #include "Sorters.h"
@@ -53,7 +54,6 @@ UserDefineDialog ScintillaEditView::_userDefineDlg;
 const int ScintillaEditView::_SC_MARGE_LINENUMBER = 0;
 const int ScintillaEditView::_SC_MARGE_SYBOLE = 1;
 const int ScintillaEditView::_SC_MARGE_FOLDER = 2;
-//const int ScintillaEditView::_SC_MARGE_MODIFMARKER = 3;
 
 WNDPROC ScintillaEditView::_scintillaDefaultProc = NULL;
 string ScintillaEditView::_defaultCharList = "";
@@ -173,10 +173,6 @@ LanguageName ScintillaEditView::langNames[L_EXTERNAL+1] = {
 //const int MASK_GREEN = 0x00FF00;
 //const int MASK_BLUE  = 0x0000FF;
 
-#define SCINTILLA_SIGNER_DISPLAY_NAME TEXT("Notepad++")
-#define SCINTILLA_SIGNER_SUBJECT TEXT("C=FR, S=Ile-de-France, L=Saint Cloud, O=\"Notepad++\", CN=\"Notepad++\"")
-#define SCINTILLA_SIGNER_KEY_ID TEXT("42C4C5846BB675C74E2B2C90C69AB44366401093")
-
 
 int getNbDigits(int aNum, int base)
 {
@@ -210,12 +206,13 @@ HMODULE loadSciLexerDll()
 	// This is helpful for developers to skip signature checking
 	// while analyzing issue or modifying the lexer dll
 #ifndef _DEBUG
-	bool isOK = VerifySignedLibrary(sciLexerPath, SCINTILLA_SIGNER_KEY_ID, SCINTILLA_SIGNER_SUBJECT, SCINTILLA_SIGNER_DISPLAY_NAME, false, false);
+	SecurityGard securityGard;
+	bool isOK = securityGard.checkModule(sciLexerPath, nm_scilexer);
 
 	if (!isOK)
 	{
 		::MessageBox(NULL,
-			TEXT("Authenticode check failed: signature or signing certificate are not recognized"),
+			TEXT("Authenticode check failed:\rsigning certificate or hash is not recognized"),
 			TEXT("Library verification failed"),
 			MB_OK | MB_ICONERROR);
 		return nullptr;
@@ -397,6 +394,14 @@ LRESULT ScintillaEditView::scintillaNew_Proc(HWND hwnd, UINT Message, WPARAM wPa
 			if (LOWORD(wParam) & MK_RBUTTON)
 			{
 				::SendMessage(_hParent, Message, wParam, lParam);
+				return TRUE;
+			}
+
+			if (LOWORD(wParam) & MK_SHIFT) {
+				// move 3 columns at a time
+				::CallWindowProc(_scintillaDefaultProc, hwnd, WM_HSCROLL, ((short)HIWORD(wParam) < 0) ? SB_LINERIGHT : SB_LINELEFT, NULL);
+				::CallWindowProc(_scintillaDefaultProc, hwnd, WM_HSCROLL, ((short)HIWORD(wParam) < 0) ? SB_LINERIGHT : SB_LINELEFT, NULL);
+				::CallWindowProc(_scintillaDefaultProc, hwnd, WM_HSCROLL, ((short)HIWORD(wParam) < 0) ? SB_LINERIGHT : SB_LINELEFT, NULL);
 				return TRUE;
 			}
 
@@ -844,20 +849,19 @@ void ScintillaEditView::setUserLexer(const TCHAR *userLangName)
 		}
 	}
 
- 	char intBuffer[15];
-	char nestingBuffer[] = "userDefine.nesting.00";
+ 	char intBuffer[32];
 
-    itoa(userLangContainer->_forcePureLC, intBuffer, 10);
+	sprintf(intBuffer, "%d", userLangContainer->_forcePureLC);
 	execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>("userDefine.forcePureLC"), reinterpret_cast<LPARAM>(intBuffer));
 
-    itoa(userLangContainer->_decimalSeparator, intBuffer, 10);
+	sprintf(intBuffer, "%d", userLangContainer->_decimalSeparator);
 	execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>("userDefine.decimalSeparator"), reinterpret_cast<LPARAM>(intBuffer));
 
 	// at the end (position SCE_USER_KWLIST_TOTAL) send id values
-	itoa(reinterpret_cast<int>(userLangContainer->getName()), intBuffer, 10); // use numeric value of TCHAR pointer
+	sprintf(intBuffer, "%" PRIuPTR, reinterpret_cast<uintptr_t>(userLangContainer->getName())); // use numeric value of TCHAR pointer
 	execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>("userDefine.udlName"), reinterpret_cast<LPARAM>(intBuffer));
 
-    itoa(reinterpret_cast<int>(_currentBufferID), intBuffer, 10); // use numeric value of BufferID pointer
+	sprintf(intBuffer, "%" PRIuPTR, reinterpret_cast<uintptr_t>(_currentBufferID)); // use numeric value of BufferID pointer
     execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>("userDefine.currentBufferID"), reinterpret_cast<LPARAM>(intBuffer));
 
 	for (int i = 0 ; i < SCE_USER_STYLE_TOTAL_STYLES ; ++i)
@@ -867,9 +871,10 @@ void ScintillaEditView::setUserLexer(const TCHAR *userLangName)
 		if (style._styleID == STYLE_NOT_USED)
 			continue;
 
-		if (i < 10)	itoa(i, (nestingBuffer+20), 10);
-		else		itoa(i, (nestingBuffer+19), 10);
-		execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>(nestingBuffer), reinterpret_cast<LPARAM>(itoa(style._nesting, intBuffer, 10)));
+		char nestingBuffer[32];
+		sprintf(nestingBuffer, "userDefine.nesting.%02d", i );
+		sprintf(intBuffer, "%d", style._nesting);
+		execute(SCI_SETPROPERTY, reinterpret_cast<WPARAM>(nestingBuffer), reinterpret_cast<LPARAM>(intBuffer));
 
 		setStyle(style);
 	}
@@ -2124,7 +2129,7 @@ TCHAR * ScintillaEditView::getGenericWordOnCaretPos(TCHAR * txt, int size)
 	getWordOnCaretPos(txtA, size);
 
 	const TCHAR * txtW = wmc->char2wchar(txtA, cp);
-	lstrcpy(txt, txtW);
+	wcscpy_s(txt, size, txtW);
 	delete [] txtA;
 	return txt;
 }
@@ -2155,7 +2160,7 @@ TCHAR * ScintillaEditView::getGenericSelectedText(TCHAR * txt, int size, bool ex
 	getSelectedText(txtA, size, expand);
 
 	const TCHAR * txtW = wmc->char2wchar(txtA, cp);
-	lstrcpy(txt, txtW);
+	wcscpy_s(txt, size, txtW);
 	delete [] txtA;
 	return txt;
 }
@@ -2828,7 +2833,7 @@ TCHAR * int2str(TCHAR *str, int strLen, int number, int base, int nbChiffre, boo
 			for ( ; *j != '\0' ; ++j)
 				if (*j == '1')
 					break;
-			lstrcpy(str, j);
+			wcscpy_s(str, strLen, j);
 		}
 		else
 		{

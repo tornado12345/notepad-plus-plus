@@ -51,7 +51,7 @@ struct WinMenuKeyDefinition //more or less matches accelerator table definition,
 	bool isCtrl;
 	bool isAlt;
 	bool isShift;
-	TCHAR * specialName;		//Used when no real menu name exists (in case of toggle for example)
+	const TCHAR * specialName;		//Used when no real menu name exists (in case of toggle for example)
 };
 
 
@@ -361,7 +361,7 @@ static const WinMenuKeyDefinition winKeyDefs[] =
 	{ VK_NULL,    IDM_LANG_USER_DLG,                            false, false, false, nullptr },
 	{ VK_NULL,    IDM_LANG_USER,                                false, false, false, nullptr },
 
-	{ VK_NULL,    IDM_SETTING_PREFERECE,                        false, false, false, nullptr },
+	{ VK_NULL,    IDM_SETTING_PREFERENCE,                       false, false, false, nullptr },
 	{ VK_NULL,    IDM_LANGSTYLE_CONFIG_DLG,                     false, false, false, nullptr },
 	{ VK_NULL,    IDM_SETTING_SHORTCUT_MAPPER,                  false, false, false, nullptr },
 	{ VK_NULL,    IDM_SETTING_IMPORTPLUGIN,                     false, false, false, nullptr },
@@ -383,7 +383,7 @@ static const WinMenuKeyDefinition winKeyDefs[] =
 //  { VK_NULL,    IDM_ONLINEHELP,                               false, false, false, nullptr },
 	{ VK_NULL,    IDM_FORUM,                                    false, false, false, nullptr },
 	{ VK_NULL,    IDM_ONLINESUPPORT,                            false, false, false, nullptr },
-	{ VK_NULL,    IDM_PLUGINSHOME,                              false, false, false, nullptr },
+//	{ VK_NULL,    IDM_PLUGINSHOME,                              false, false, false, nullptr },
 	{ VK_NULL,    IDM_UPDATE_NPP,                               false, false, false, nullptr },
 	{ VK_NULL,    IDM_CONFUPDATERPROXY,                         false, false, false, nullptr },
 	{ VK_NULL,    IDM_DEBUGINFO,                                false, false, false, nullptr },
@@ -697,7 +697,7 @@ bool LocalizationSwitcher::addLanguageFromXml(wstring xmlFullPath)
 }
 
 
-bool LocalizationSwitcher::switchToLang(wchar_t *lang2switch) const
+bool LocalizationSwitcher::switchToLang(const wchar_t *lang2switch) const
 {
 	wstring langPath = getXmlFilePathFromLangName(lang2switch);
 	if (langPath.empty())
@@ -829,11 +829,6 @@ int FileDialog::_dialogFileBoxId = (NppParameters::getInstance())->getWinVersion
 
 NppParameters::NppParameters()
 {
-	// init import UDL array
-	_nbImportedULD = 0;
-	for (int i = 0 ; i < NB_MAX_IMPORTED_UDL ; ++i)
-		_importedULD[i] = nullptr;
-
 	//Get windows version
 	_winVersion = getWindowsVersion();
 
@@ -890,14 +885,20 @@ bool NppParameters::reloadStylers(TCHAR* stylePath)
 	bool loadOkay = _pXmlUserStylerDoc->LoadFile();
 	if (!loadOkay)
 	{
-		_pNativeLangSpeaker->messageBox("LoadStylersFailed",
-			NULL,
-			TEXT("Load \"$STR_REPLACE$\" failed!"),
-			TEXT("Load stylers.xml failed"),
-			MB_OK,
-			0,
-			stylePathToLoad);
-
+		if (!_pNativeLangSpeaker)
+		{
+			::MessageBox(NULL, stylePathToLoad, TEXT("Load stylers.xml failed"), MB_OK);
+		}
+		else
+		{
+			_pNativeLangSpeaker->messageBox("LoadStylersFailed",
+				NULL,
+				TEXT("Load \"$STR_REPLACE$\" failed!"),
+				TEXT("Load stylers.xml failed"),
+				MB_OK,
+				0,
+				stylePathToLoad);
+		}
 		delete _pXmlUserStylerDoc;
 		_pXmlUserStylerDoc = NULL;
 		return false;
@@ -998,7 +999,7 @@ bool NppParameters::load()
 		{
 			generic_string progPath = getSpecialFolderLocation(CSIDL_PROGRAM_FILES);
 			TCHAR nppDirLocation[MAX_PATH];
-			lstrcpy(nppDirLocation, _nppPath.c_str());
+			wcscpy_s(nppDirLocation, _nppPath.c_str());
 			::PathRemoveFileSpec(nppDirLocation);
 
 			if  (progPath == nppDirLocation)
@@ -1006,29 +1007,43 @@ bool NppParameters::load()
 		}
 	}
 
+	_pluginRootDir = _nppPath;
+	PathAppend(_pluginRootDir, TEXT("plugins"));
+
+	generic_string nppPluginRootParent;
 	if (_isLocal)
 	{
-		_userPath = _nppPath;
+		_userPath = nppPluginRootParent = _nppPath;
+		_userPluginConfDir = _pluginRootDir;
+		PathAppend(_userPluginConfDir, TEXT("Config"));
 	}
 	else
 	{
 		_userPath = getSpecialFolderLocation(CSIDL_APPDATA);
 
 		PathAppend(_userPath, TEXT("Notepad++"));
-		_appdataNppDir = _userPath;
-
-		// Plugin System V1
 		if (!PathFileExists(_userPath.c_str()))
 			::CreateDirectory(_userPath.c_str(), NULL);
 
-		// Plugin System V2
-		_localAppdataNppDir = getSpecialFolderLocation(CSIDL_LOCAL_APPDATA);
-		PathAppend(_localAppdataNppDir, TEXT("Notepad++"));
-		if (!PathFileExists(_localAppdataNppDir.c_str()))
-			::CreateDirectory(_localAppdataNppDir.c_str(), NULL);
-	}
-	
+		_appdataNppDir = _userPluginConfDir = _userPath;
+		PathAppend(_userPluginConfDir, TEXT("plugins"));
+		if (!PathFileExists(_userPluginConfDir.c_str()))
+			::CreateDirectory(_userPluginConfDir.c_str(), NULL);
+		PathAppend(_userPluginConfDir, TEXT("Config"));
+		if (!PathFileExists(_userPluginConfDir.c_str()))
+			::CreateDirectory(_userPluginConfDir.c_str(), NULL);
 
+		// For PluginAdmin to launch the wingup with UAC
+		setElevationRequired(true);
+	}
+
+	_pluginConfDir = _pluginRootDir; // for plugin list home
+	PathAppend(_pluginConfDir, TEXT("Config"));
+
+	if (!PathFileExists(nppPluginRootParent.c_str()))
+		::CreateDirectory(nppPluginRootParent.c_str(), NULL);
+	if (!PathFileExists(_pluginRootDir.c_str()))
+		::CreateDirectory(_pluginRootDir.c_str(), NULL);
 
 	_sessionPath = _userPath; // Session stock the absolute file path, it should never be on cloud
 
@@ -1076,15 +1091,26 @@ bool NppParameters::load()
 	BOOL doRecover = FALSE;
 	if (::PathFileExists(langs_xml_path.c_str()))
 	{
-		struct _stat buf;
+		WIN32_FILE_ATTRIBUTE_DATA attributes;
 
-		if (generic_stat(langs_xml_path.c_str(), &buf)==0)
-			if (buf.st_size == 0)
-				doRecover = _pNativeLangSpeaker->messageBox("LoadLangsFailed",
-					NULL,
-					TEXT("Load langs.xml failed!\rDo you want to recover your langs.xml?"),
-					TEXT("Configurator"),
-					MB_YESNO);
+		if (GetFileAttributesEx(langs_xml_path.c_str(), GetFileExInfoStandard, &attributes) != 0)
+		{
+			if (attributes.nFileSizeLow == 0 && attributes.nFileSizeHigh == 0)
+			{
+				if (_pNativeLangSpeaker)
+				{
+					doRecover = _pNativeLangSpeaker->messageBox("LoadLangsFailed",
+						NULL,
+						TEXT("Load langs.xml failed!\rDo you want to recover your langs.xml?"),
+						TEXT("Configurator"),
+						MB_YESNO);
+				}
+				else
+				{
+					doRecover = ::MessageBox(NULL, TEXT("Load langs.xml failed!\rDo you want to recover your langs.xml?"), TEXT("Configurator"), MB_YESNO);
+				}
+			}
+		}
 	}
 	else
 		doRecover = true;
@@ -1102,11 +1128,18 @@ bool NppParameters::load()
 	bool loadOkay = _pXmlDoc->LoadFile();
 	if (!loadOkay)
 	{
-		_pNativeLangSpeaker->messageBox("LoadLangsFailedFinal",
-			NULL,
-			TEXT("Load langs.xml failed!"),
-			TEXT("Configurator"),
-			MB_OK);
+		if (_pNativeLangSpeaker)
+		{
+			_pNativeLangSpeaker->messageBox("LoadLangsFailedFinal",
+				NULL,
+				TEXT("Load langs.xml failed!"),
+				TEXT("Configurator"),
+				MB_OK);
+		}
+		else
+		{
+			::MessageBox(NULL, TEXT("Load langs.xml failed!"), TEXT("Configurator"), MB_OK);
+		}
 
 		delete _pXmlDoc;
 		_pXmlDoc = nullptr;
@@ -1163,14 +1196,20 @@ bool NppParameters::load()
 	loadOkay = _pXmlUserStylerDoc->LoadFile();
 	if (!loadOkay)
 	{
-		_pNativeLangSpeaker->messageBox("LoadStylersFailed",
-			NULL,
-			TEXT("Load \"$STR_REPLACE$\" failed!"),
-			TEXT("Load stylers.xml failed"),
-			MB_OK,
-			0,
-			_stylerPath.c_str());
-
+		if (_pNativeLangSpeaker)
+		{
+			_pNativeLangSpeaker->messageBox("LoadStylersFailed",
+				NULL,
+				TEXT("Load \"$STR_REPLACE$\" failed!"),
+				TEXT("Load stylers.xml failed"),
+				MB_OK,
+				0,
+				_stylerPath.c_str());
+		}
+		else
+		{
+			::MessageBox(NULL, _stylerPath.c_str(), TEXT("Load stylers.xml failed"), MB_OK);
+		}
 		delete _pXmlUserStylerDoc;
 		_pXmlUserStylerDoc = NULL;
 		isAllLaoded = false;
@@ -1185,8 +1224,12 @@ bool NppParameters::load()
 	//-----------------------------------//
 	// userDefineLang.xml : for per user //
 	//-----------------------------------//
-	_userDefineLangPath = _userPath;
+	generic_string userDefineLangsFolderPath = _userDefineLangPath = _userPath;
 	PathAppend(_userDefineLangPath, TEXT("userDefineLang.xml"));
+	PathAppend(userDefineLangsFolderPath, TEXT("userDefineLangs"));
+
+	std::vector<generic_string> udlFiles;
+	getFilesInFolder(udlFiles, TEXT("*.xml"), userDefineLangsFolderPath);
 
 	_pXmlUserLangDoc = new TiXmlDocument(_userDefineLangPath);
 	loadOkay = _pXmlUserLangDoc->LoadFile();
@@ -1197,7 +1240,27 @@ bool NppParameters::load()
 		isAllLaoded = false;
 	}
 	else
-		getUserDefineLangsFromXmlTree();
+	{
+		auto r = addUserDefineLangsFromXmlTree(_pXmlUserLangDoc);
+		if (r.second - r.first > 0)
+			_pXmlUserLangsDoc.push_back(UdlXmlFileState(_pXmlUserLangDoc, false, r));
+	}
+
+	for (const auto& i : udlFiles)
+	{
+		auto udlDoc = new TiXmlDocument(i);
+		loadOkay = udlDoc->LoadFile();
+		if (!loadOkay)
+		{
+			delete udlDoc;
+		}
+		else
+		{
+			auto r = addUserDefineLangsFromXmlTree(udlDoc);
+			if (r.second - r.first > 0)
+				_pXmlUserLangsDoc.push_back(UdlXmlFileState(udlDoc, false, r));
+		}
+	}
 
 	//----------------------------------------------//
 	// nativeLang.xml : for per user				//
@@ -1358,14 +1421,12 @@ void NppParameters::destroyInstance()
 	delete _pXmlDoc;
 	delete _pXmlUserDoc;
 	delete _pXmlUserStylerDoc;
-	delete _pXmlUserLangDoc;
-
-	for (int i = 0 ; i < _nbImportedULD ; ++i)
+	
+	//delete _pXmlUserLangDoc; will be deleted in the vector
+	for (auto l : _pXmlUserLangsDoc)
 	{
-		delete _importedULD[i];
-		_importedULD[i] = nullptr;
+		delete l._udlXmlDoc;
 	}
-	_nbImportedULD = 0;
 
 	delete _pXmlNativeLangDocA;
 	delete _pXmlToolIconsDoc;
@@ -1617,14 +1678,14 @@ bool NppParameters::getUserParametersFromXmlTree()
 }
 
 
-bool NppParameters::getUserDefineLangsFromXmlTree(TiXmlDocument *tixmldoc)
+std::pair<unsigned char, unsigned char> NppParameters::addUserDefineLangsFromXmlTree(TiXmlDocument *tixmldoc)
 {
 	if (!tixmldoc)
-		return false;
+		return std::pair<unsigned char, unsigned char>(0, 0);
 
 	TiXmlNode *root = tixmldoc->FirstChild(TEXT("NotepadPlus"));
 	if (!root)
-		return false;
+		return std::pair<unsigned char, unsigned char>(0, 0);
 
 	return feedUserLang(root);
 }
@@ -1971,8 +2032,8 @@ bool NppParameters::getSessionFromXmlTree(TiXmlDocument *pSessionDoc, Session *p
 		return false;
 
 	TiXmlElement *actView = sessionRoot->ToElement();
-	size_t index;
-	const TCHAR *str = actView->Attribute(TEXT("activeView"), reinterpret_cast<int *>(&index));
+	int index = 0;
+	const TCHAR *str = actView->Attribute(TEXT("activeView"), &index);
 	if (str)
 	{
 		(*ptrSession)._activeView = index;
@@ -1986,9 +2047,9 @@ bool NppParameters::getSessionFromXmlTree(TiXmlDocument *pSessionDoc, Session *p
 	{
 		if (viewRoots[k])
 		{
-			size_t index2;
+			int index2 = 0;
 			TiXmlElement *actIndex = viewRoots[k]->ToElement();
-			str = actIndex->Attribute(TEXT("activeIndex"), reinterpret_cast<int *>(&index2));
+			str = actIndex->Attribute(TEXT("activeIndex"), &index2);
 			if (str)
 			{
 				if (k == 0)
@@ -2050,8 +2111,9 @@ bool NppParameters::getSessionFromXmlTree(TiXmlDocument *pSessionDoc, Session *p
 					const TCHAR *encStr = (childNode->ToElement())->Attribute(TEXT("encoding"), &encoding);
 					const TCHAR *backupFilePath = (childNode->ToElement())->Attribute(TEXT("backupFilePath"));
 
-					int fileModifiedTimestamp = 0;
-					(childNode->ToElement())->Attribute(TEXT("originalFileLastModifTimestamp"), &fileModifiedTimestamp);
+					FILETIME fileModifiedTimestamp;
+					(childNode->ToElement())->Attribute(TEXT("originalFileLastModifTimestamp"), reinterpret_cast<int32_t*>(&fileModifiedTimestamp.dwLowDateTime));
+					(childNode->ToElement())->Attribute(TEXT("originalFileLastModifTimestampHigh"), reinterpret_cast<int32_t*>(&fileModifiedTimestamp.dwHighDateTime));
 
 					sessionFileInfo sfi(fileName, langName, encStr?encoding:-1, position, backupFilePath, fileModifiedTimestamp, mapPosition);
 
@@ -2543,10 +2605,9 @@ bool NppParameters::getShortcuts(TiXmlNode *node, Shortcut & sc)
 }
 
 
-bool NppParameters::feedUserLang(TiXmlNode *node)
+std::pair<unsigned char, unsigned char> NppParameters::feedUserLang(TiXmlNode *node)
 {
-	bool isEverythingOK = true;
-	bool hasFoundElement = false;
+	int iBegin = _nbUserLang;
 
 	for (TiXmlNode *childNode = node->FirstChildElement(TEXT("UserLang"));
 		childNode && (_nbUserLang < NB_MAX_USER_LANG);
@@ -2555,7 +2616,6 @@ bool NppParameters::feedUserLang(TiXmlNode *node)
 		const TCHAR *name = (childNode->ToElement())->Attribute(TEXT("name"));
 		const TCHAR *ext = (childNode->ToElement())->Attribute(TEXT("ext"));
 		const TCHAR *udlVersion = (childNode->ToElement())->Attribute(TEXT("udlVersion"));
-		hasFoundElement = true;
 		try {
 			if (!name || !name[0] || !ext)
 				throw std::runtime_error("NppParameters::feedUserLang : UserLang name is missing");
@@ -2592,28 +2652,33 @@ bool NppParameters::feedUserLang(TiXmlNode *node)
 					_userLangArray[_nbUserLang - 1]->_styleArray.addStyler(i, globalMappper().styleNameMapper[i].c_str());
 			}
 
-		} catch (std::exception e) {
+		}
+		catch (const std::exception& /*e*/)
+		{
 			delete _userLangArray[--_nbUserLang];
-			isEverythingOK = false;
 		}
 	}
-	if (isEverythingOK)
-		isEverythingOK = hasFoundElement;
-	return isEverythingOK;
+	int iEnd = _nbUserLang;
+	return pair<unsigned char, unsigned char>(iBegin, iEnd);
 }
 
 bool NppParameters::importUDLFromFile(generic_string sourceFile)
 {
-	if (_nbImportedULD >= NB_MAX_IMPORTED_UDL)
-		return false;
-
 	TiXmlDocument *pXmlUserLangDoc = new TiXmlDocument(sourceFile);
 	bool loadOkay = pXmlUserLangDoc->LoadFile();
 	if (loadOkay)
 	{
-		loadOkay = getUserDefineLangsFromXmlTree(pXmlUserLangDoc);
+		auto r = addUserDefineLangsFromXmlTree(pXmlUserLangDoc);
+		loadOkay = (r.second - r.first) != 0;
+		if (loadOkay)
+		{
+			_pXmlUserLangsDoc.push_back(UdlXmlFileState(nullptr, true, r));
+
+			// imported UDL from xml file will be added into default udl, so we should make default udl dirty
+			setUdlXmlDirtyFromXmlDoc(_pXmlUserLangDoc);
+		}
 	}
-	_importedULD[_nbImportedULD++] = pXmlUserLangDoc;
+	delete pXmlUserLangDoc;
 	return loadOkay;
 }
 
@@ -2818,33 +2883,111 @@ bool NppParameters::writeSettingsFilesOnCloudForThe1stTime(const generic_string 
 	return true;
 }
 
+/*
+Default UDL + Created + Imported
 
-void NppParameters::writeUserDefinedLang()
+*/
+void NppParameters::writeDefaultUDL()
 {
-	if (!_pXmlUserLangDoc)
+	bool firstCleanDone = false;
+	std::vector<bool> deleteState;
+	for (auto udl : _pXmlUserLangsDoc)
 	{
-		//do the treatment
-		_pXmlUserLangDoc = new TiXmlDocument(_userDefineLangPath);
+		if (!_pXmlUserLangDoc)
+		{
+			_pXmlUserLangDoc = new TiXmlDocument(_userDefineLangPath);
+			_pXmlUserLangDoc->InsertEndChild(TiXmlElement(TEXT("NotepadPlus")));
+		}
+
+		bool toDelete = (udl._indexRange.second - udl._indexRange.first) == 0;
+		deleteState.push_back(toDelete);
+		if ((!udl._udlXmlDoc || udl._udlXmlDoc == _pXmlUserLangDoc) && udl._isDirty && !toDelete) // new created or/and imported UDL plus _pXmlUserLangDoc (if exist)
+		{
+			TiXmlNode *root = _pXmlUserLangDoc->FirstChild(TEXT("NotepadPlus"));
+			if (root && !firstCleanDone)
+			{
+				_pXmlUserLangDoc->RemoveChild(root);
+				_pXmlUserLangDoc->InsertEndChild(TiXmlElement(TEXT("NotepadPlus")));
+				firstCleanDone = true;
+			}
+
+			root = _pXmlUserLangDoc->FirstChild(TEXT("NotepadPlus"));
+
+			for (int i = udl._indexRange.first; i < udl._indexRange.second; ++i)
+			{
+				insertUserLang2Tree(root, _userLangArray[i]);
+			}
+		}
 	}
 
-	//before remove the branch, we allocate and copy the TCHAR * which will be destroyed
+	bool deleteAll = true;
+	for (bool del : deleteState)
+	{
+		if (!del)
+		{
+			deleteAll = false;
+			break;
+		}
+	}
+
+	if (firstCleanDone) // at least one udl is for saving, the udl to be deleted are ignored
+	{
+		_pXmlUserLangDoc->SaveFile();
+	}
+	else if (deleteAll)
+	{
+		if (::PathFileExists(_userDefineLangPath.c_str()))
+		{
+			::DeleteFile(_userDefineLangPath.c_str());
+		}
+	}
+	// else nothing to change, do nothing
+}
+
+void NppParameters::writeNonDefaultUDL()
+{
+	for (auto udl : _pXmlUserLangsDoc)
+	{
+		if (udl._isDirty && udl._udlXmlDoc != nullptr && udl._udlXmlDoc != _pXmlUserLangDoc)
+		{
+			if (udl._indexRange.second == udl._indexRange.first) // no more udl for this xmldoc container
+			{
+				// no need to save, delete file
+				const TCHAR* docFilePath = udl._udlXmlDoc->Value();
+				if (docFilePath && ::PathFileExists(docFilePath))
+				{
+					::DeleteFile(docFilePath);
+				}
+			}
+			else
+			{
+				TiXmlNode *root = udl._udlXmlDoc->FirstChild(TEXT("NotepadPlus"));
+				if (root)
+				{
+					udl._udlXmlDoc->RemoveChild(root);
+				}
+
+				udl._udlXmlDoc->InsertEndChild(TiXmlElement(TEXT("NotepadPlus")));
+
+				root = udl._udlXmlDoc->FirstChild(TEXT("NotepadPlus"));
+
+				for (int i = udl._indexRange.first; i < udl._indexRange.second; ++i)
+				{
+					insertUserLang2Tree(root, _userLangArray[i]);
+				}
+				udl._udlXmlDoc->SaveFile();
+			}
+		}
+	}
+}
+
+void NppParameters::writeNeed2SaveUDL()
+{
 	stylerStrOp(DUP);
 
-	TiXmlNode *root = _pXmlUserLangDoc->FirstChild(TEXT("NotepadPlus"));
-	if (root)
-	{
-		_pXmlUserLangDoc->RemoveChild(root);
-	}
-
-	_pXmlUserLangDoc->InsertEndChild(TiXmlElement(TEXT("NotepadPlus")));
-
-	root = _pXmlUserLangDoc->FirstChild(TEXT("NotepadPlus"));
-
-	for (int i = 0 ; i < _nbUserLang ; ++i)
-	{
-		insertUserLang2Tree(root, _userLangArray[i]);
-	}
-	_pXmlUserLangDoc->SaveFile();
+	writeDefaultUDL();
+	writeNonDefaultUDL();
+	
 	stylerStrOp(FREE);
 }
 
@@ -2985,7 +3128,8 @@ void NppParameters::writeSession(const Session & session, const TCHAR *fileName)
 				(fileNameNode->ToElement())->SetAttribute(TEXT("encoding"), viewSessionFiles[i]._encoding);
 				(fileNameNode->ToElement())->SetAttribute(TEXT("filename"), viewSessionFiles[i]._fileName.c_str());
 				(fileNameNode->ToElement())->SetAttribute(TEXT("backupFilePath"), viewSessionFiles[i]._backupFilePath.c_str());
-				(fileNameNode->ToElement())->SetAttribute(TEXT("originalFileLastModifTimestamp"), static_cast<int32_t>(viewSessionFiles[i]._originalFileLastModifTimestamp));
+				(fileNameNode->ToElement())->SetAttribute(TEXT("originalFileLastModifTimestamp"), static_cast<int32_t>(viewSessionFiles[i]._originalFileLastModifTimestamp.dwLowDateTime));
+				(fileNameNode->ToElement())->SetAttribute(TEXT("originalFileLastModifTimestampHigh"), static_cast<int32_t>(viewSessionFiles[i]._originalFileLastModifTimestamp.dwHighDateTime));
 				
 				// docMap 
 				(fileNameNode->ToElement())->SetAttribute(TEXT("mapFirstVisibleDisplayLine"), viewSessionFiles[i]._mapPos._firstVisibleDisplayLine);
@@ -3096,11 +3240,18 @@ int NppParameters::addUserLangToEnd(const UserLangContainer & userLang, const TC
 {
 	if (isExistingUserLangName(newName))
 		return -1;
-
+	unsigned char iBegin = _nbUserLang;
 	_userLangArray[_nbUserLang] = new UserLangContainer();
 	*(_userLangArray[_nbUserLang]) = userLang;
 	_userLangArray[_nbUserLang]->_name = newName;
 	++_nbUserLang;
+	unsigned char iEnd = _nbUserLang;
+
+	_pXmlUserLangsDoc.push_back(UdlXmlFileState(nullptr, true, make_pair(iBegin, iEnd)));
+
+	// imported UDL from xml file will be added into default udl, so we should make default udl dirty
+	setUdlXmlDirtyFromXmlDoc(_pXmlUserLangDoc);
+
 	return _nbUserLang-1;
 }
 
@@ -3114,6 +3265,8 @@ void NppParameters::removeUserLang(size_t index)
 	for (int32_t i = static_cast<int32_t>(index); i < (_nbUserLang - 1); ++i)
 		_userLangArray[i] = _userLangArray[i+1];
 	_nbUserLang--;
+
+	removeIndexFromXmlUdls(index);
 }
 
 
@@ -3179,7 +3332,7 @@ void NppParameters::feedUserKeywordList(TiXmlNode *node)
 		TiXmlNode *valueNode = childNode->FirstChild();
 		if (valueNode)
 		{
-			TCHAR *kwl = nullptr;
+			const TCHAR *kwl = nullptr;
 			if (!lstrcmp(udlVersion, TEXT("")) && !lstrcmp(keywordsName, TEXT("Delimiters")))	// support for old style (pre 2.0)
 			{
 				basic_string<TCHAR> temp;
@@ -3193,7 +3346,7 @@ void NppParameters::feedUserKeywordList(TiXmlNode *node)
 				temp += TEXT(" 08");	if (kwl[5] != '0') temp += kwl[5];
 
 				temp += TEXT(" 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
-				lstrcpy(_userLangArray[_nbUserLang - 1]->_keywordLists[SCE_USER_KWLIST_DELIMITERS], temp.c_str());
+				wcscpy_s(_userLangArray[_nbUserLang - 1]->_keywordLists[SCE_USER_KWLIST_DELIMITERS], temp.c_str());
 			}
 			else if (!lstrcmp(keywordsName, TEXT("Comment")))
 			{
@@ -3227,7 +3380,7 @@ void NppParameters::feedUserKeywordList(TiXmlNode *node)
 				if (temp[0] == ' ')
 					temp.erase(0, 1);
 
-				lstrcpy(_userLangArray[_nbUserLang - 1]->_keywordLists[SCE_USER_KWLIST_COMMENTS], temp.c_str());
+				wcscpy_s(_userLangArray[_nbUserLang - 1]->_keywordLists[SCE_USER_KWLIST_COMMENTS], temp.c_str());
 			}
 			else
 			{
@@ -3237,11 +3390,11 @@ void NppParameters::feedUserKeywordList(TiXmlNode *node)
 					id = globalMappper().keywordIdMapper[keywordsName];
 					if (_tcslen(kwl) < max_char)
 					{
-						lstrcpy(_userLangArray[_nbUserLang - 1]->_keywordLists[id], kwl);
+						wcscpy_s(_userLangArray[_nbUserLang - 1]->_keywordLists[id], kwl);
 					}
 					else
 					{
-						lstrcpy(_userLangArray[_nbUserLang - 1]->_keywordLists[id], TEXT("imported string too long, needs to be < max_char(30720)"));
+						wcscpy_s(_userLangArray[_nbUserLang - 1]->_keywordLists[id], TEXT("imported string too long, needs to be < max_char(30720)"));
 					}
 				}
 			}
@@ -5259,7 +5412,7 @@ bool NppParameters::writeScintillaParams()
 	(scintNode->ToElement())->SetAttribute(TEXT("Wrap"), _svp._doWrap?TEXT("yes"):TEXT("no"));
 	(scintNode->ToElement())->SetAttribute(TEXT("borderEdge"), _svp._showBorderEdge ? TEXT("yes") : TEXT("no"));
 
-	TCHAR *edgeStr = NULL;
+	const TCHAR *edgeStr;
 	if (_svp._edgeMode == EDGE_NONE)
 		edgeStr = TEXT("no");
 	else if (_svp._edgeMode == EDGE_LINE)
@@ -6476,12 +6629,16 @@ void NppParameters::stylerStrOp(bool op)
 
 			if (op == DUP)
 			{
-				TCHAR *str = new TCHAR[lstrlen(style._styleDesc) + 1];
-				style._styleDesc = lstrcpy(str, style._styleDesc);
+				const size_t strLen = lstrlen(style._styleDesc) + 1;
+				TCHAR *str = new TCHAR[strLen];
+				wcscpy_s(str, strLen, style._styleDesc);
+				style._styleDesc = str;
 				if (style._fontName)
 				{
-					str = new TCHAR[lstrlen(style._fontName) + 1];
-					style._fontName = lstrcpy(str, style._fontName);
+					const size_t strLen2 = lstrlen(style._fontName) + 1;
+					str = new TCHAR[strLen2];
+					wcscpy_s(str, strLen2, style._fontName);
+					style._fontName = str;
 				}
 				else
 				{
@@ -6579,12 +6736,82 @@ void NppParameters::safeWow64EnableWow64FsRedirection(BOOL Wow64FsEnableRedirect
 	}
 }
 
+void NppParameters::setUdlXmlDirtyFromIndex(size_t i)
+{
+	for (auto& uxfs : _pXmlUserLangsDoc)
+	{
+		if (i >= uxfs._indexRange.first && i < uxfs._indexRange.second)
+		{
+			uxfs._isDirty = true;
+			return;
+		}
+	}
+}
+
+/*
+Considering we have done:
+load default UDL:  3 languges
+load a UDL file:   1 languge
+load a UDL file:   2 languges
+create a UDL:      1 languge
+imported a UDL:    1 languge
+
+the evolution to remove UDL one by one:
+
+0[D1]                        0[D1]                        0[D1]                         [D1]                         [D1]
+1[D2]                        1[D2]                        1[D2]                        0[D2]                         [D2]
+2[D3]  [DUDL, <0,3>]         2[D3]  [DUDL, <0,3>]         2[D3]  [DUDL, <0,3>]         1[D3]  [DUDL, <0,2>]          [D3]  [DUDL, <0,0>]
+3[U1]  [NUDL, <3,4>]         3[U1]  [NUDL, <3,4>]         3[U1]  [NUDL, <3,4>]         2[U1]  [NUDL, <2,3>]          [U1]  [NUDL, <0,0>]
+4[U2]                        4[U2]                         [U2]                         [U2]                         [U2]
+5[U2]  [NUDL, <4,6>]         5[U2]  [NUDL, <4,6>]         4[U2]  [NUDL, <4,5>]         3[U2]  [NUDL, <3,4>]         0[U2]  [NUDL, <0,1>]
+6[C1]  [NULL, <6,7>]          [C1]  [NULL, <6,6>]          [C1]  [NULL, <5,5>]          [C1]  [NULL, <4,4>]          [C1]  [NULL, <1,1>]
+7[I1]  [NULL, <7,8>]         6[I1]  [NULL, <6,7>]         5[I1]  [NULL, <5,6>]         4[I1]  [NULL, <4,5>]         1[I1]  [NULL, <1,2>]
+*/
+void NppParameters::removeIndexFromXmlUdls(size_t i)
+{
+	bool isUpdateBegin = false;
+	for (auto& uxfs : _pXmlUserLangsDoc)
+	{
+		// Find index
+		if (!isUpdateBegin && (i >= uxfs._indexRange.first && i < uxfs._indexRange.second)) // found it
+		{
+			if (uxfs._indexRange.second > 0)
+				uxfs._indexRange.second -= 1;
+			uxfs._isDirty = true;
+
+			isUpdateBegin = true;
+		}
+
+		// Update
+		else if (isUpdateBegin)
+		{
+			if (uxfs._indexRange.first > 0)
+				uxfs._indexRange.first -= 1;
+			if (uxfs._indexRange.second > 0)
+				uxfs._indexRange.second -= 1;
+		}
+	}
+}
+
+void NppParameters::setUdlXmlDirtyFromXmlDoc(const TiXmlDocument* xmlDoc)
+{
+	for (auto& uxfs : _pXmlUserLangsDoc)
+	{
+		if (xmlDoc == uxfs._udlXmlDoc)
+		{
+			uxfs._isDirty = true;
+			return;
+		}
+	}
+}
 
 Date::Date(const TCHAR *dateStr)
 {
 	// timeStr should be Notepad++ date format : YYYYMMDD
 	assert(dateStr);
-	if (lstrlen(dateStr) == 8)
+	int D = lstrlen(dateStr);
+
+	if ( 8==D )
 	{
 		generic_string ds(dateStr);
 		generic_string yyyy(ds, 0, 4);

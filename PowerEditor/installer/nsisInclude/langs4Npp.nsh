@@ -283,6 +283,12 @@ SectionGroup "Localization" localization
 	${MementoUnselectedSection} "Kurdish" kurdish
 		CopyFiles "$PLUGINSDIR\nppLocalization\kurdish.xml" "$INSTDIR\localization\kurdish.xml"
 	${MementoSectionEnd}
+	${MementoUnselectedSection} "Piglatin" piglatin
+		CopyFiles "$PLUGINSDIR\nppLocalization\piglatin.xml" "$INSTDIR\localization\piglatin.xml"
+	${MementoSectionEnd}
+        ${MementoUnselectedSection} "Zulu" zulu
+		CopyFiles "$PLUGINSDIR\nppLocalization\zulu.xml" "$INSTDIR\localization\zulu.xml"
+	${MementoSectionEnd}
 SectionGroupEnd
 
 SectionGroup un.localization
@@ -540,5 +546,11 @@ SectionGroup un.localization
 	SectionEnd
 	Section un.kurdish
 		Delete "$INSTDIR\localization\kurdish.xml"
+	SectionEnd
+	Section un.piglatin
+		Delete "$INSTDIR\localization\piglatin.xml"
+	SectionEnd
+        Section un.zulu
+		Delete "$INSTDIR\localization\zulu.xml"
 	SectionEnd
 SectionGroupEnd

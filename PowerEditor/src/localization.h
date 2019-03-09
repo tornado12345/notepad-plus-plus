@@ -37,6 +37,7 @@ class FindReplaceDlg;
 class PreferenceDlg;
 class ShortcutMapper;
 class UserDefineDialog;
+class PluginsAdminDlg;
 
 class MenuPosition {
 public:
@@ -54,7 +55,7 @@ public:
 	void changeConfigLang(HWND hDlg);
 	void changeLangTabContextMenu(HMENU hCM);
 	TiXmlNodeA * searchDlgNode(TiXmlNodeA *node, const char *dlgTagName);
-	bool changeDlgLang(HWND hDlg, const char *dlgTagName, char *title = NULL);
+	bool changeDlgLang(HWND hDlg, const char *dlgTagName, char *title = NULL, size_t titleMaxSize = 0);
 	void changeLangTabDrapContextMenu(HMENU hCM);
 	generic_string getSpecialMenuEntryName(const char *entryName) const;
 	generic_string getNativeLangMenuString(int itemID) const;
@@ -65,6 +66,8 @@ public:
 	void changeUserDefineLangPopupDlg(HWND hDlg);
     void changeFindReplaceDlgLang(FindReplaceDlg & findReplaceDlg);
     void changePrefereceDlgLang(PreferenceDlg & preference);
+	void changePluginsAdminDlgLang(PluginsAdminDlg & pluginsAdminDlg);
+
     bool isRTL() const {
         return _isRTL;
     };

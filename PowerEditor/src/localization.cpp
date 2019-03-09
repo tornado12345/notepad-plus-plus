@@ -100,6 +100,7 @@ MenuPosition menuPos[] = {
 	{ 6,  4, -1, "settings-import" },
 
 	{ 7,  0, -1, "tools-md5" },
+	{ 7,  1, -1, "tools-sha256" },
 	{ -1, -1, -1, "" } // End of array
 };
 
@@ -754,116 +755,177 @@ void NativeLangSpeaker::changeFindReplaceDlgLang(FindReplaceDlg & findReplaceDlg
 	changeDlgLang(findReplaceDlg.getHSelf(), "Find");
 }
 
+void NativeLangSpeaker::changePluginsAdminDlgLang(PluginsAdminDlg & pluginsAdminDlg)
+{
+	if (_nativeLangA)
+	{
+		TiXmlNodeA *dlgNode = _nativeLangA->FirstChild("Dialog");
+		if (dlgNode)
+		{
+			dlgNode = searchDlgNode(dlgNode, "PluginsAdminDlg");
+			if (dlgNode)
+			{
+				WcharMbcsConvertor *wmc = WcharMbcsConvertor::getInstance();
+
+				TiXmlNodeA *ColumnPluginNode = dlgNode->FirstChild("ColumnPlugin");
+				if (ColumnPluginNode)
+				{
+					const char *name = (ColumnPluginNode->ToElement())->Attribute("name");
+					if (name && name[0])
+					{
+						basic_string<wchar_t> nameW = wmc->char2wchar(name, _nativeLangEncoding);
+						pluginsAdminDlg.changeColumnName(COLUMN_PLUGIN, nameW.c_str());
+					}
+				}
+
+				TiXmlNodeA *ColumnVersionNode = dlgNode->FirstChild("ColumnVersion");
+				if (ColumnVersionNode)
+				{
+					const char *name = (ColumnVersionNode->ToElement())->Attribute("name");
+					if (name && name[0])
+					{
+						basic_string<wchar_t> nameW = wmc->char2wchar(name, _nativeLangEncoding);
+						pluginsAdminDlg.changeColumnName(COLUMN_VERSION, nameW.c_str());
+					}
+				}
+
+				const char *titre1 = (dlgNode->ToElement())->Attribute("titleAvailable");
+				const char *titre2 = (dlgNode->ToElement())->Attribute("titleUpdates");
+				const char *titre3 = (dlgNode->ToElement())->Attribute("titleInstalled");
+
+				if (titre1 && titre1[0])
+				{
+					basic_string<wchar_t> nameW = wmc->char2wchar(titre1, _nativeLangEncoding);
+					pluginsAdminDlg.changeTabName(AVAILABLE_LIST, nameW.c_str());
+				}
+				if (titre2  && titre2[0])
+				{
+					basic_string<wchar_t> nameW = wmc->char2wchar(titre2, _nativeLangEncoding);
+					pluginsAdminDlg.changeTabName(UPDATES_LIST, nameW.c_str());
+				}
+				if (titre3 && titre3[0])
+				{
+					basic_string<wchar_t> nameW = wmc->char2wchar(titre3, _nativeLangEncoding);
+					pluginsAdminDlg.changeTabName(INSTALLED_LIST, nameW.c_str());
+				}
+			}
+
+			changeDlgLang(pluginsAdminDlg.getHSelf(), "PluginsAdminDlg");
+		}
+	}
+}
+
 void NativeLangSpeaker::changePrefereceDlgLang(PreferenceDlg & preference) 
 {
 	auto currentSel = preference.getListSelectedIndex();
 	changeDlgLang(preference.getHSelf(), "Preference");
 
 	WcharMbcsConvertor *wmc = WcharMbcsConvertor::getInstance();
-	char titre[128];
-	changeDlgLang(preference._barsDlg.getHSelf(), "Global", titre);
+	const size_t titreMaxSize = 128;
+	char titre[titreMaxSize];
+	changeDlgLang(preference._barsDlg.getHSelf(), "Global", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Global"), nameW);
 	}
-	changeDlgLang(preference._marginsDlg.getHSelf(), "Scintillas", titre);
+	changeDlgLang(preference._marginsDlg.getHSelf(), "Scintillas", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Scintillas"), nameW);
 	}
 
-	changeDlgLang(preference._defaultNewDocDlg.getHSelf(), "NewDoc", titre);
+	changeDlgLang(preference._defaultNewDocDlg.getHSelf(), "NewDoc", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("NewDoc"), nameW);
 	}
 
-	changeDlgLang(preference._defaultDirectoryDlg.getHSelf(), "DefaultDir", titre);
+	changeDlgLang(preference._defaultDirectoryDlg.getHSelf(), "DefaultDir", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("DefaultDir"), nameW);
 	}
 
-	changeDlgLang(preference._recentFilesHistoryDlg.getHSelf(), "RecentFilesHistory", titre);
+	changeDlgLang(preference._recentFilesHistoryDlg.getHSelf(), "RecentFilesHistory", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("RecentFilesHistory"), nameW);
 	}
 
-	changeDlgLang(preference._fileAssocDlg.getHSelf(), "FileAssoc", titre);
+	changeDlgLang(preference._fileAssocDlg.getHSelf(), "FileAssoc", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("FileAssoc"), nameW);
 	}
 
-	changeDlgLang(preference._langMenuDlg.getHSelf(), "Language", titre);
+	changeDlgLang(preference._langMenuDlg.getHSelf(), "Language", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Language"), nameW);
 	}
 
-	changeDlgLang(preference._highlighting.getHSelf(), "Highlighting", titre);
+	changeDlgLang(preference._highlighting.getHSelf(), "Highlighting", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Highlighting"), nameW);
 	}
 
-	changeDlgLang(preference._printSettingsDlg.getHSelf(), "Print", titre);
+	changeDlgLang(preference._printSettingsDlg.getHSelf(), "Print", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Print"), nameW);
 	}
-	changeDlgLang(preference._settingsDlg.getHSelf(), "MISC", titre);
+	changeDlgLang(preference._settingsDlg.getHSelf(), "MISC", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("MISC"), nameW);
 	}
-	changeDlgLang(preference._backupDlg.getHSelf(), "Backup", titre);
+	changeDlgLang(preference._backupDlg.getHSelf(), "Backup", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Backup"), nameW);
 	}
 
-	changeDlgLang(preference._autoCompletionDlg.getHSelf(), "AutoCompletion", titre);
+	changeDlgLang(preference._autoCompletionDlg.getHSelf(), "AutoCompletion", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("AutoCompletion"), nameW);
 	}
 
-	changeDlgLang(preference._multiInstDlg.getHSelf(), "MultiInstance", titre);
+	changeDlgLang(preference._multiInstDlg.getHSelf(), "MultiInstance", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("MultiInstance"), nameW);
 	}
 
-	changeDlgLang(preference._delimiterSettingsDlg.getHSelf(), "Delimiter", titre);
+	changeDlgLang(preference._delimiterSettingsDlg.getHSelf(), "Delimiter", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Delimiter"), nameW);
 	}
 
-	changeDlgLang(preference._settingsOnCloudDlg.getHSelf(), "Cloud", titre);
+	changeDlgLang(preference._settingsOnCloudDlg.getHSelf(), "Cloud", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
 		preference.renameDialogTitle(TEXT("Cloud"), nameW);
 	}
 
-	changeDlgLang(preference._searchEngineDlg.getHSelf(), "SearchEngine", titre);
+	changeDlgLang(preference._searchEngineDlg.getHSelf(), "SearchEngine", titre, titreMaxSize);
 	if (titre[0] != '\0')
 	{
 		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
@@ -982,7 +1044,7 @@ TiXmlNodeA * NativeLangSpeaker::searchDlgNode(TiXmlNodeA *node, const char *dlgT
 	return NULL;
 }
 
-bool NativeLangSpeaker::changeDlgLang(HWND hDlg, const char *dlgTagName, char *title)
+bool NativeLangSpeaker::changeDlgLang(HWND hDlg, const char *dlgTagName, char *title, size_t titleMaxSize)
 {
 	if (title)
 		title[0] = '\0';
@@ -998,14 +1060,14 @@ bool NativeLangSpeaker::changeDlgLang(HWND hDlg, const char *dlgTagName, char *t
 	WcharMbcsConvertor *wmc = WcharMbcsConvertor::getInstance();
 
 	// Set Title
-	const char *titre = (dlgNode->ToElement())->Attribute("title");
-	if ((titre && titre[0]) && hDlg)
+	const char *title2set = (dlgNode->ToElement())->Attribute("title");
+	if ((title2set && title2set[0]) && hDlg)
 	{
-		const wchar_t *nameW = wmc->char2wchar(titre, _nativeLangEncoding);
+		const wchar_t *nameW = wmc->char2wchar(title2set, _nativeLangEncoding);
 		::SetWindowText(hDlg, nameW);
 
-		if (title)
-			strcpy(title, titre);
+		if (title && titleMaxSize)
+			strncpy(title, title2set, titleMaxSize - 1);
 	}
 
 	// Set the text of child control

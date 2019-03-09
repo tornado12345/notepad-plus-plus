@@ -27,12 +27,12 @@
 
 #pragma once
 
-#define NOTEPAD_PLUS_VERSION TEXT("Notepad++ v7.5.6")
+#define NOTEPAD_PLUS_VERSION TEXT("Notepad++ v7.6.4")
 
 // should be X.Y : ie. if VERSION_DIGITALVALUE == 4, 7, 1, 0 , then X = 4, Y = 71
 // ex : #define VERSION_VALUE TEXT("5.63\0")
-#define VERSION_VALUE TEXT("7.56\0")
-#define VERSION_DIGITALVALUE 7, 5, 6, 0
+#define VERSION_VALUE TEXT("7.64\0")
+#define VERSION_DIGITALVALUE 7, 6, 4, 0
 
 
 
@@ -43,6 +43,8 @@
 #define IDI_M30ICON                100
 #define IDI_CHAMELEON            101
 //#define IDI_JESUISCHARLIE        102
+//#define IDI_GILETJAUNE        102
+
 #define IDR_RT_MANIFEST         103
 
 #define IDI_NEW_OFF_ICON      201
@@ -149,6 +151,18 @@
 
 #define IDI_FUNCLIST_SORTBUTTON        631
 #define IDI_FUNCLIST_RELOADBUTTON    632
+
+
+#define IDI_VIEW_DOC_MAP_ON_ICON       633
+#define IDI_VIEW_DOC_MAP_OFF_ICON      634
+#define IDI_VIEW_FILEBROWSER_ON_ICON   635
+#define IDI_VIEW_FILEBROWSER_OFF_ICON  636
+#define IDI_VIEW_FUNCLIST_ON_ICON      637
+#define IDI_VIEW_FUNCLIST_OFF_ICON     638
+#define IDI_VIEW_MONITORING_ON_ICON    639
+#define IDI_VIEW_MONITORING_OFF_ICON   640
+
+
 
 #define IDC_MY_CUR     1402
 #define IDC_UP_ARROW  1403
@@ -419,6 +433,8 @@
 	#define NPPM_INTERNAL_SETWORDCHARS              (NOTEPADPLUS_USER_INTERNAL + 45)
 	#define NPPM_INTERNAL_EXPORTFUNCLISTANDQUIT     (NOTEPADPLUS_USER_INTERNAL + 46)
 	#define NPPM_INTERNAL_PRNTANDQUIT               (NOTEPADPLUS_USER_INTERNAL + 47)
+	#define NPPM_INTERNAL_SAVEBACKUP        		(NOTEPADPLUS_USER_INTERNAL + 48)
+	#define NPPM_INTERNAL_STOPMONITORING            (NOTEPADPLUS_USER_INTERNAL + 49) // Used by Monitoring feature
 
     //wParam: 0
     //lParam: document new index
