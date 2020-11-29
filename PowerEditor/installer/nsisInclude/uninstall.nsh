@@ -29,7 +29,7 @@ Var installPath
 Var doLocalConf
 Var keepUserData
 Function un.onInit
-	StrCpy $keepUserData "false"	; default value(It is must, otherwise few files such as shortcuts.xml, contextMenu.xml etc, will not be removed when $INSTDIR\doLocalConf.xml is not avaliable.)
+	StrCpy $keepUserData "false"	; default value(It is must, otherwise few files such as shortcuts.xml, contextMenu.xml etc, will not be removed when $INSTDIR\doLocalConf.xml is not available.)
 	; determinate theme path for uninstall themes
 	StrCpy $installPath "$APPDATA\${APPNAME}"
 	StrCpy $doLocalConf "false"
@@ -51,10 +51,10 @@ Function un.onUninstSuccess
 	RMDir "$INSTDIR\plugins\disabled\"
 	RMDir "$INSTDIR\plugins\"
 	RMDir "$INSTDIR\updater\"
+	RMDir "$INSTDIR\autoCompletion\"
 	RMDir "$INSTDIR\"
 
 	RMDir "$APPDATA\${APPNAME}\plugins\"
-	RMDir "$installPath\autoCompletion\"
 	RMDir "$installPath\userDefineLangs\"
 	RMDir "$installPath\themes\"	; if files are kept because of $keepUserData, this will not be deleted
 	RMDir "$installPath\"
@@ -248,6 +248,7 @@ Section Uninstall
 	Delete "$INSTDIR\NppHelp.chm"
 	Delete "$INSTDIR\userDefinedLang-markdown.default.modern.xml"
 	Delete "$INSTDIR\userDefineLangs\userDefinedLang-markdown.default.modern.xml"
+	Delete "$INSTDIR\userDefineLangs\markdown._preinstalled.udl.xml"
 	Delete "$INSTDIR\doLocalConf.xml"
 	Delete "$INSTDIR\uninstall.ini"
 	
@@ -269,10 +270,11 @@ Section Uninstall
 		Delete "$APPDATA\${APPNAME}\userDefineLang.xml"
 		Delete "$APPDATA\${APPNAME}\insertExt.ini"
 		Delete "$APPDATA\${APPNAME}\userDefineLangs\userDefinedLang-markdown.default.modern.xml"
+		Delete "$APPDATA\${APPNAME}\userDefineLangs\markdown._preinstalled.udl.xml"
 		RMDir /r "$APPDATA\${APPNAME}\plugins\"
 		RMDir /r "$APPDATA\${APPNAME}\backup\"	; Remove backup folder recursively if not empty
-		RMDir "$APPDATA\${APPNAME}\themes\"	; has no effect as not empty at this momenet, but it is taken care at un.onUninstSuccess
-		RMDir "$APPDATA\${APPNAME}"		; has no effect as not empty at this momenet, but it is taken care at un.onUninstSuccess
+		RMDir "$APPDATA\${APPNAME}\themes\"	; has no effect as not empty at this moment, but it is taken care at un.onUninstSuccess
+		RMDir "$APPDATA\${APPNAME}"		; has no effect as not empty at this moment, but it is taken care at un.onUninstSuccess
 		
 		StrCmp $1 "Admin" 0 +2
 			SetShellVarContext all ; make context for all user

@@ -1,5 +1,5 @@
 // This file is part of Notepad++ project
-// Copyright (C)2003 Don HO <don.h@free.fr>
+// Copyright (C)2020 Don HO <don.h@free.fr>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -64,7 +64,7 @@ enum class SplitterMode: std::uint8_t
 class Splitter : public Window
 {
 public:
-	Splitter();
+	Splitter() = default;
 	virtual ~Splitter() = default;
 
 	virtual void destroy() override;
@@ -80,10 +80,11 @@ public:
 
 
 private:
-	RECT _rect;
+	RECT _rect = {};
 	double _splitPercent = 0.;
 	int _splitterSize = 0;
 	bool _isDraged = false;
+	bool _isLeftButtonDown = false;
 	DWORD _dwFlags = 0;
 	bool _isFixed = false;
 	static bool _isHorizontalRegistered;
@@ -102,7 +103,7 @@ private:
 	bool isVertical() const {return (_dwFlags & SV_VERTICAL) != 0;};
 	void paintArrow(HDC hdc, const RECT &rect, Arrow arrowDir);
 	void gotoTopLeft();
-	void gotoRightBouuom();
+	void gotoRightBottom();
 
 	bool isInLeftTopZone(const POINT& p) const
 	{

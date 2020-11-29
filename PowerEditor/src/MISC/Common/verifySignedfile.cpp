@@ -1,5 +1,5 @@
 // This file is part of Notepad++ project
-// Copyright (C)2003-2017 Don HO <don.h@free.fr>
+// Copyright (C)2020 Don HO <don.h@free.fr>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -36,14 +36,14 @@
 #include <wincrypt.h>
 #include <sensapi.h>
 #include <iomanip>
-#include "VerifySignedFile.h"
+#include "verifySignedfile.h"
 #include "Common.h"
 #include "sha-256.h"
 
 using namespace std;
 
-SecurityMode SecurityGard::_securityMode = sm_sha256;
-//SecurityMode SecurityGard::_securityMode = sm_certif;
+//SecurityMode SecurityGard::_securityMode = sm_sha256;
+SecurityMode SecurityGard::_securityMode = sm_certif;
 
 SecurityGard::SecurityGard()
 {
@@ -55,20 +55,40 @@ SecurityGard::SecurityGard()
 
 	_pluginListSha256.push_back(TEXT("be9e251a30fd712fd2ff98febd360805df51110b6659de8c9a0000220d7ae535")); // v1.0.7 32 bit (unsigned)
 	_pluginListSha256.push_back(TEXT("3ecd7f9c56bcd659a4126c659eb69b354789c78574a82390749ac751ae539bc6")); // v1.0.7 64 bit (unsigned)
+
+	_pluginListSha256.push_back(TEXT("a4a7e57d605f29b294378d0d94fc867b9febd6a1cc63f1bb69bcb7609dc25f2c")); // v1.0.8 32 bit (unsigned)
+	_pluginListSha256.push_back(TEXT("1c404fd3578273f5ecde585af82179ff3b63c635fb4fa24be21ebde708e403e4")); // v1.0.8 64 bit (unsigned)
 }
 
 bool SecurityGard::checkModule(const std::wstring& filePath, NppModule module2check)
 {
+#ifndef _DEBUG
 	if (_securityMode == sm_certif)
 		return verifySignedLibrary(filePath, module2check);
 	else if (_securityMode == sm_sha256)
 		return checkSha256(filePath, module2check);
 	else
 		return false;
+#else
+	// Do not check integrity if npp is running in debug mode
+	// This is helpful for developers to skip signature checking
+	// while analyzing issue or modifying the lexer dll
+	(void)filePath;
+	(void)module2check;
+	return true;
+#endif
 }
 
 bool SecurityGard::checkSha256(const std::wstring& filePath, NppModule module2check)
 {
+	// Uncomment the following code if the components are rebuilt for testing
+	// It should be stay in commenting out
+	/*
+	bool dontCheck = true;
+	if (dontCheck)
+		return true;
+	*/
+
 	std::string content = getFileContent(filePath.c_str());
 	uint8_t sha2hash[32];
 	calc_sha_256(sha2hash, reinterpret_cast<const uint8_t*>(content.c_str()), content.length());

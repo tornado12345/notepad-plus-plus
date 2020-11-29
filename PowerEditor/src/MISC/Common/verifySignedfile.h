@@ -1,5 +1,5 @@
 // This file is part of Notepad++ project
-// Copyright (C)2003-2017 Don HO <don.h@free.fr>
+// Copyright (C)2020 Don HO <don.h@free.fr>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -80,7 +80,7 @@ private:
 	// Code signing certificate
 	std::wstring _signer_display_name = TEXT("Notepad++");
 	std::wstring _signer_subject = TEXT("C=FR, S=Ile-de-France, L=Saint Cloud, O=\"Notepad++\", CN=\"Notepad++\"");
-	std::wstring _signer_key_id = TEXT("42C4C5846BB675C74E2B2C90C69AB44366401093");
+	std::wstring _signer_key_id = TEXT("ED255D9151912E40DF048A56288E969A8D0DAFA3");
 	bool _doCheckRevocation = false;
 	bool _doCheckChainOfTrust = false;
 

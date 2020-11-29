@@ -1,5 +1,5 @@
 // This file is part of Notepad++ project
-// Copyright (C)2003 Don HO <don.h@free.fr>
+// Copyright (C)2020 Don HO <don.h@free.fr>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -35,13 +35,12 @@
 
 FileDialog *FileDialog::staticThis = NULL;
 
-FileDialog::FileDialog(HWND hwnd, HINSTANCE hInst) 
-	: _nbCharFileExt(0), _nbExt(0), _fileExt(NULL), _extTypeIndex(-1)
+FileDialog::FileDialog(HWND hwnd, HINSTANCE hInst)
 {
 	staticThis = this;
     
 	memset(_fileName, 0, sizeof(_fileName));
-	_winVersion = (NppParameters::getInstance())->getWinVersion();
+	_winVersion = (NppParameters::getInstance()).getWinVersion();
 
 	_ofn.lStructSize = sizeof(_ofn);
 	if (_winVersion < WV_W2K)
@@ -70,11 +69,8 @@ FileDialog::FileDialog(HWND hwnd, HINSTANCE hInst)
 
 FileDialog::~FileDialog()
 {
-	if (_fileExt)
-	{
-		delete[] _fileExt;
-		_fileExt = NULL;
-	}
+	delete[] _fileExt;
+	_fileExt = NULL;
 }
 
 // This function set and concatenate the filter into the list box of FileDialog.
@@ -165,12 +161,13 @@ TCHAR* FileDialog::doOpenSingleFileDlg()
 {
 	TCHAR dir[MAX_PATH];
 	::GetCurrentDirectory(MAX_PATH, dir);
-	NppParameters * params = NppParameters::getInstance();
-	_ofn.lpstrInitialDir = params->getWorkingDir();
+	NppParameters& params = NppParameters::getInstance();
+	_ofn.lpstrInitialDir = params.getWorkingDir();
+	_ofn.lpstrDefExt = _defExt.c_str();
 
 	_ofn.Flags |= OFN_FILEMUSTEXIST;
 
-	if (!params->useNewStyleSaveDlg())
+	if (!params.useNewStyleSaveDlg())
 	{
 		_ofn.Flags |= OFN_ENABLEHOOK | OFN_NOVALIDATE;
 		_ofn.lpfnHook = OFNHookProc;
@@ -181,10 +178,10 @@ TCHAR* FileDialog::doOpenSingleFileDlg()
 	{
 		fn = ::GetOpenFileName(&_ofn) ? _fileName : NULL;
 
-		if (params->getNppGUI()._openSaveDir == dir_last)
+		if (params.getNppGUI()._openSaveDir == dir_last)
 		{
 			::GetCurrentDirectory(MAX_PATH, dir);
-			params->setWorkingDir(dir);
+			params.setWorkingDir(dir);
 		}
 	}
 	catch (std::exception& e)
@@ -211,22 +208,22 @@ stringVector * FileDialog::doOpenMultiFilesDlg()
 	TCHAR dir[MAX_PATH];
 	::GetCurrentDirectory(MAX_PATH, dir);
 
-	NppParameters * params = NppParameters::getInstance();
-	_ofn.lpstrInitialDir = params->getWorkingDir();
+	NppParameters& params = NppParameters::getInstance();
+	_ofn.lpstrInitialDir = params.getWorkingDir();
 
 	_ofn.Flags |= OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_ENABLESIZING;
 
-	if (!params->useNewStyleSaveDlg())
+	if (!params.useNewStyleSaveDlg())
 	{
 		_ofn.Flags |= OFN_ENABLEHOOK | OFN_NOVALIDATE;
 		_ofn.lpfnHook = OFNHookProc;
 	}
 
 	BOOL res = ::GetOpenFileName(&_ofn);
-	if (params->getNppGUI()._openSaveDir == dir_last)
+	if (params.getNppGUI()._openSaveDir == dir_last)
 	{
 		::GetCurrentDirectory(MAX_PATH, dir);
-		params->setWorkingDir(dir);
+		params.setWorkingDir(dir);
 	}
 	::SetCurrentDirectory(dir);
 
@@ -268,12 +265,15 @@ TCHAR * FileDialog::doSaveDlg()
 	TCHAR dir[MAX_PATH];
 	::GetCurrentDirectory(MAX_PATH, dir);
 
-	NppParameters * params = NppParameters::getInstance();
-	_ofn.lpstrInitialDir = params->getWorkingDir();
+	NppParameters& params = NppParameters::getInstance();
+	_ofn.lpstrInitialDir = params.getWorkingDir();
+	_ofn.lpstrDefExt = _defExt.c_str();
+	if (_extTypeIndex != -1)
+		_ofn.nFilterIndex = _extTypeIndex + 1; // +1 for the file extension combobox index starts from 1
 
 	_ofn.Flags |= OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY | OFN_ENABLESIZING;
 
-	if (!params->useNewStyleSaveDlg())
+	if (!params.useNewStyleSaveDlg())
 	{
 		_ofn.Flags |= OFN_ENABLEHOOK | OFN_NOVALIDATE;
 		_ofn.lpfnHook = OFNHookProc;
@@ -283,10 +283,10 @@ TCHAR * FileDialog::doSaveDlg()
 	try
 	{
 		fn = ::GetSaveFileName(&_ofn) ? _fileName : NULL;
-		if (params->getNppGUI()._openSaveDir == dir_last)
+		if (params.getNppGUI()._openSaveDir == dir_last)
 		{
 			::GetCurrentDirectory(MAX_PATH, dir);
-			params->setWorkingDir(dir);
+			params.setWorkingDir(dir);
 		}
 	}
 	catch (std::exception& e)
@@ -351,7 +351,9 @@ static LRESULT CALLBACK fileDlgProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 };
 
 
-static TCHAR * get1stExt(TCHAR *ext) { // precondition : ext should be under the format : Batch (*.bat;*.cmd;*.nt)
+static TCHAR * get1stExt(TCHAR *ext)
+{
+	// precondition : ext should be under the format : Batch (*.bat;*.cmd;*.nt)
 	TCHAR *begin = ext;
 	for ( ; *begin != '.' ; begin++);
 	TCHAR *end = ++begin;
@@ -362,7 +364,8 @@ static TCHAR * get1stExt(TCHAR *ext) { // precondition : ext should be under the
 	return begin;
 };
 
-static generic_string addExt(HWND textCtrl, HWND typeCtrl) {
+static generic_string addExt(HWND textCtrl, HWND typeCtrl)
+{
 	TCHAR fn[MAX_PATH];
 	::GetWindowText(textCtrl, fn, MAX_PATH);
 	
@@ -390,8 +393,8 @@ UINT_PTR CALLBACK FileDialog::OFNHookProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
     {
         case WM_INITDIALOG :
         {
-			NppParameters *pNppParam = NppParameters::getInstance();
-			int index = pNppParam->getFileSaveDlgFilterIndex();
+			NppParameters& nppParam = NppParameters::getInstance();
+			int index = nppParam.getFileSaveDlgFilterIndex();
 
 			::SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(staticThis));
 			hFileDlg = ::GetParent(hWnd);
@@ -456,8 +459,8 @@ BOOL APIENTRY FileDialog::run(HWND hWnd, UINT uMsg, WPARAM, LPARAM lParam)
 				{
 					HWND typeControl = ::GetDlgItem(::GetParent(hWnd), cmb1);
 					int index = static_cast<int32_t>(::SendMessage(typeControl, CB_GETCURSEL, 0, 0));
-					NppParameters *pNppParam = NppParameters::getInstance();
-					pNppParam->setFileSaveDlgFilterIndex(index);
+					NppParameters& nppParam = NppParameters::getInstance();
+					nppParam.setFileSaveDlgFilterIndex(index);
 
 					// change forward-slash to back-slash directory paths so dialog can interpret
 					OPENFILENAME* ofn = reinterpret_cast<LPOFNOTIFY>(lParam)->lpOFN;
@@ -510,7 +513,7 @@ void goToCenter(HWND hwnd)
 	::GetClientRect(hParent, &rc);
 	
 	//If window coordinates are all zero(ie,window is minimised),then assign desktop as the parent window.
- 	if(rc.left == 0 && rc.right == 0 && rc.top == 0 && rc.bottom == 0)
+ 	if (rc.left == 0 && rc.right == 0 && rc.top == 0 && rc.bottom == 0)
  	{
  		//hParent = ::GetDesktopWindow();
 		::ShowWindow(hParent, SW_SHOWNORMAL);
